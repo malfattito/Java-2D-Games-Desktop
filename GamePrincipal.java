@@ -9,7 +9,7 @@ public class GamePrincipal extends JGEngine
 		
 		//Configura os parametros da janela
 		engine.windowManager.setResolution(800, 600, 32);
-		engine.windowManager.setfullScreen(true);
+		engine.windowManager.setfullScreen(false);
 		
 		//Cria as cenas do jogo
 		CenaAbertura cenaAbertura = new CenaAbertura();
