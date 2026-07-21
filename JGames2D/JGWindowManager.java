@@ -36,6 +36,9 @@ public class JGWindowManager extends JFrame
 	private boolean fullScreen;
 	private GraphicsDevice graphDevice = null;
 	private BufferedImage backBuffer = null;
+	private BufferedImage frontBuffer = null;
+	private Graphics2D frontGraphics = null;
+	private final Object bufferLock = new Object();
 	private JGEngine gameManager = null;
 	private Cursor cursor = null;
 	public Color backgroundColor = Color.black;
@@ -226,6 +229,46 @@ public class JGWindowManager extends JFrame
 
 		backBuffer = new BufferedImage(width,height,BufferedImage.TYPE_INT_RGB);
 		gameManager.graphics = backBuffer.createGraphics();
+
+		//O quadro exibido fica numa copia propria. Sem isso a EDT leria o
+		//mesmo buffer que a thread do jogo esta desenhando, rasgando a imagem.
+		synchronized (bufferLock)
+		{
+			if (frontGraphics != null)
+			{
+				frontGraphics.dispose();
+			}
+
+			if (frontBuffer != null)
+			{
+				frontBuffer.flush();
+			}
+
+			frontBuffer = new BufferedImage(width,height,BufferedImage.TYPE_INT_RGB);
+			frontGraphics = frontBuffer.createGraphics();
+		}
+	}
+
+	/***********************************************************
+	*Name: presentFrame
+	*Description: publishes the finished frame: copies the back buffer into
+	*             the front buffer and asks the window to repaint itself
+	*Parameters: none
+	*Return: none
+	************************************************************/
+	void presentFrame()
+	{
+		synchronized (bufferLock)
+		{
+			if (frontGraphics == null || backBuffer == null)
+			{
+				return;
+			}
+
+			frontGraphics.drawImage(backBuffer, 0, 0, null);
+		}
+
+		repaint();
 	}
 	
 	/***********************************************************
@@ -423,42 +466,46 @@ public class JGWindowManager extends JFrame
 	************************************************************/
 	public void paint(Graphics graphics)
 	{
-		//A thread do jogo pode liberar o buffer enquanto a EDT repinta
-		BufferedImage buffer = backBuffer;
-
-		if (buffer == null)
-		{
-			return;
-		}
-
 		Point origin = getContentOrigin();
 		Graphics2D g2d = (Graphics2D)graphics;
-
-		if (!fullScreen)
-		{
-			g2d.drawImage(buffer,origin.x,origin.y,null);
-			return;
-		}
 
 		double scale = getRenderScale();
 		int destWidth = (int)(width * scale);
 		int destHeight = (int)(height * scale);
 
 		//Tarjas pretas quando a proporcao da tela difere da do jogo
-		g2d.setColor(Color.black);
-		if (origin.y > 0)
+		if (fullScreen)
 		{
-			g2d.fillRect(0, 0, getWidth(), origin.y);
-			g2d.fillRect(0, origin.y + destHeight, getWidth(), getHeight() - origin.y - destHeight);
-		}
-		if (origin.x > 0)
-		{
-			g2d.fillRect(0, 0, origin.x, getHeight());
-			g2d.fillRect(origin.x + destWidth, 0, getWidth() - origin.x - destWidth, getHeight());
+			g2d.setColor(Color.black);
+			if (origin.y > 0)
+			{
+				g2d.fillRect(0, 0, getWidth(), origin.y);
+				g2d.fillRect(0, origin.y + destHeight, getWidth(), getHeight() - origin.y - destHeight);
+			}
+			if (origin.x > 0)
+			{
+				g2d.fillRect(0, 0, origin.x, getHeight());
+				g2d.fillRect(origin.x + destWidth, 0, getWidth() - origin.x - destWidth, getHeight());
+			}
 		}
 
-		g2d.drawImage(buffer, origin.x, origin.y, origin.x + destWidth, origin.y + destHeight,
-				              0, 0, width, height, null);
+		//Le o quadro publicado, nunca o que esta sendo desenhado agora
+		synchronized (bufferLock)
+		{
+			if (frontBuffer == null)
+			{
+				return;
+			}
+
+			if (!fullScreen)
+			{
+				g2d.drawImage(frontBuffer,origin.x,origin.y,null);
+				return;
+			}
+
+			g2d.drawImage(frontBuffer, origin.x, origin.y, origin.x + destWidth, origin.y + destHeight,
+					                   0, 0, width, height, null);
+		}
 	}
 	
 	/*******************************************
@@ -487,6 +534,23 @@ public class JGWindowManager extends JFrame
 		if (buffer != null)
 		{
 			buffer.flush();
+		}
+
+		//A EDT pode estar dentro de paint(): so libera o quadro exibido
+		//depois de obter o mesmo cadeado que ela usa
+		synchronized (bufferLock)
+		{
+			if (frontGraphics != null)
+			{
+				frontGraphics.dispose();
+				frontGraphics = null;
+			}
+
+			if (frontBuffer != null)
+			{
+				frontBuffer.flush();
+				frontBuffer = null;
+			}
 		}
 
 		windowTitle = null;

@@ -22,11 +22,14 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	//Class attributes
 	private final int KEYS_NUMBER = 256;
 	private boolean[] keyStates = null;
-	private boolean[] prevKeyStates = null;
+	private boolean[] keyReleasedStates = null;
 	private JGVector2D mousePosition = null;
 	private boolean mouseState = false;
-	private boolean mousePrevState = false;
+	private boolean mouseReleasedState = false;
 	private JGWindowManager windowManager = null;
+
+	//Os eventos chegam pela thread da interface e sao lidos pela thread do jogo
+	private final Object inputLock = new Object();
 
 	/*******************************************
    	* Name: JGInputManager
@@ -39,7 +42,7 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 		mousePosition = new JGVector2D();
 
 		keyStates = new boolean[KEYS_NUMBER];
-		prevKeyStates = new boolean[KEYS_NUMBER];
+		keyReleasedStates = new boolean[KEYS_NUMBER];
 
 		if (window instanceof JGWindowManager)
 		{
@@ -97,14 +100,37 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
    	******************************************/
 	public void reset()
 	{
-		for (int index=0; index < keyStates.length; index++)
+		synchronized (inputLock)
 		{
-			keyStates[index] = false;
-			prevKeyStates[index] = false;
-			
+			for (int index=0; index < keyStates.length; index++)
+			{
+				keyStates[index] = false;
+				keyReleasedStates[index] = false;
+			}
+			mouseState = false;
+			mouseReleasedState = false;
 		}
-		mouseState = false;
-		mousePrevState = false;
+	}
+
+	/*******************************************
+   	* Name: endFrame()
+   	* Description: closes the input frame, discarding the events already
+   	*              delivered to the scene. Called once per frame by the engine
+   	*              so that reading an event never consumes it: every object can
+   	*              ask about the same click during the whole frame.
+   	* Parameters: none
+   	* Returns: none
+   	******************************************/
+	void endFrame()
+	{
+		synchronized (inputLock)
+		{
+			for (int index=0; index < keyReleasedStates.length; index++)
+			{
+				keyReleasedStates[index] = false;
+			}
+			mouseReleasedState = false;
+		}
 	}
 	
 	/*******************************************
@@ -120,7 +146,10 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 			return false;
 		}
 
-		return prevKeyStates[keyCode] && !keyStates[keyCode];
+		synchronized (inputLock)
+		{
+			return keyReleasedStates[keyCode];
+		}
 	}
 	
 	/***********************************************************
@@ -131,7 +160,10 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	************************************************************/
 	public boolean mouseReleased()
 	{
-		return (mousePrevState && !mouseState) ? true : false;
+		synchronized (inputLock)
+		{
+			return mouseReleasedState;
+		}
 	}
 	
 	/*******************************************
@@ -147,11 +179,12 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 			return false;
 		}
 
-		boolean result = prevKeyStates[keyCode] && !keyStates[keyCode];
-
-		prevKeyStates[keyCode] = false;
-
-		return result;
+		//Nao zera o estado: varios objetos podem consultar a mesma tecla no
+		//mesmo quadro. A limpeza acontece uma vez so, em endFrame().
+		synchronized (inputLock)
+		{
+			return keyReleasedStates[keyCode];
+		}
 	}
 	
 	/***********************************************************
@@ -162,11 +195,12 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	************************************************************/
 	public boolean mouseClicked()
 	{
-		boolean result = (mousePrevState && !mouseState);
-		
-		mousePrevState = false;
-		
-		return result;
+		//Nao zera o estado: todos os botoes do menu podem testar o mesmo
+		//clique no mesmo quadro. A limpeza acontece em endFrame().
+		synchronized (inputLock)
+		{
+			return mouseReleasedState;
+		}
 	}
 	
 	/*******************************************
@@ -177,7 +211,15 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
    	******************************************/
 	public boolean keyPressed(int keyCode)
 	{
-		return isValidKey(keyCode) && keyStates[keyCode];
+		if (!isValidKey(keyCode))
+		{
+			return false;
+		}
+
+		synchronized (inputLock)
+		{
+			return keyStates[keyCode];
+		}
 	}
 
 	/***********************************************************
@@ -188,7 +230,10 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	************************************************************/
 	public boolean mousePressed()
 	{
-		return mouseState;
+		synchronized (inputLock)
+		{
+			return mouseState;
+		}
 	}
 	/*******************************************
    	* Name: getMousePosition
@@ -211,7 +256,10 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	{
 		if(isValidKey(e.getKeyCode()))
 		{
-			keyStates[e.getKeyCode()] = true;
+			synchronized (inputLock)
+			{
+				keyStates[e.getKeyCode()] = true;
+			}
 		}
 	}
 	
@@ -225,8 +273,13 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	{
 		if(isValidKey(e.getKeyCode()))
 		{
-			prevKeyStates[e.getKeyCode()] = keyStates[e.getKeyCode()];
-			keyStates[e.getKeyCode()] = false;
+			//Marca o evento mesmo que a tecla tenha sido pressionada e solta
+			//entre dois quadros: assim um toque rapido nunca se perde
+			synchronized (inputLock)
+			{
+				keyReleasedStates[e.getKeyCode()] = true;
+				keyStates[e.getKeyCode()] = false;
+			}
 		}
 	}
 	
@@ -282,8 +335,11 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	************************************************************/
 	public void mouseReleased(MouseEvent e)
 	{
-		mousePrevState = mouseState;
-		mouseState = false;
+		synchronized (inputLock)
+		{
+			mouseReleasedState = true;
+			mouseState = false;
+		}
 	}
 	
 	/***********************************************************
@@ -316,7 +372,10 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	************************************************************/
 	public void mousePressed(MouseEvent e)
 	{
-		mouseState = true;
+		synchronized (inputLock)
+		{
+			mouseState = true;
+		}
 	}
 	
 	/***********************************************************
@@ -328,7 +387,7 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	public void free()
 	{
 		keyStates = null;
-		prevKeyStates = null;
+		keyReleasedStates = null;
 		mousePosition.free();
 		mousePosition = null;
 	}

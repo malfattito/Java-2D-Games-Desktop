@@ -110,26 +110,35 @@ public class JGEngine implements Runnable
 	{
 		JGTimeManager.update();
 
-		JGLevel level = currentLevel;
-
-		if (level == null)
+		try
 		{
-			return;
+			JGLevel level = currentLevel;
+
+			if (level == null)
+			{
+				return;
+			}
+
+			level.execute();
+
+			//A logica da cena pode ter trocado o nivel corrente. Nesse caso o nivel
+			//antigo ja foi liberado: o novo so sera desenhado no proximo quadro.
+			if (level != currentLevel)
+			{
+				return;
+			}
+
+			level.update();
+
+			windowManager.clearBackBuffer();
+			level.render();
 		}
-
-		level.execute();
-
-		//A logica da cena pode ter trocado o nivel corrente. Nesse caso o nivel
-		//antigo ja foi liberado: o novo so sera desenhado no proximo quadro.
-		if (level != currentLevel)
+		finally
 		{
-			return;
+			//Encerra o quadro de entrada: os eventos ficaram disponiveis para
+			//toda a cena durante o quadro inteiro e agora podem ser descartados
+			inputManager.endFrame();
 		}
-
-		level.update();
-
-		windowManager.clearBackBuffer();
-		level.render();
 	}
 	
 	/***********************************************************
@@ -179,7 +188,7 @@ public class JGEngine implements Runnable
 	************************************************************/
 	private void swapBuffers()
 	{
-		windowManager.repaint();
+		windowManager.presentFrame();
 	}
 	
 	/***********************************************************
