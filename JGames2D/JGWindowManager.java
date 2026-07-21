@@ -11,6 +11,7 @@ package JGames2D;
 import java.awt.Color;
 //Used packages
 import java.awt.Cursor;
+import java.awt.Dimension;
 import java.awt.DisplayMode;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -41,6 +42,7 @@ public class JGWindowManager extends JFrame
 	private final Object bufferLock = new Object();
 	private JGEngine gameManager = null;
 	private Cursor cursor = null;
+	private javax.swing.Timer cursorTimer = null;
 	public Color backgroundColor = Color.black;
 	public int width, height;
 	
@@ -367,6 +369,7 @@ public class JGWindowManager extends JFrame
 
 		//Reaplica o cursor invisivel: a exibicao e a tela cheia refazem o peer
 		hideCursor();
+		keepCursorHidden();
 	}
 
 	/***********************************************************
@@ -383,16 +386,65 @@ public class JGWindowManager extends JFrame
 	{
 		if (cursor == null)
 		{
-			BufferedImage blank = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+			//Usa o tamanho que o sistema aceita: uma imagem de tamanho
+			//diferente pode ser recusada, e o ponteiro volta a aparecer
+			Dimension tamanho = Toolkit.getDefaultToolkit().getBestCursorSize(16, 16);
+			int largura = (tamanho.width > 0) ? tamanho.width : 16;
+			int altura = (tamanho.height > 0) ? tamanho.height : 16;
+
+			BufferedImage blank = new BufferedImage(largura, altura, BufferedImage.TYPE_INT_ARGB);
 			cursor = Toolkit.getDefaultToolkit().createCustomCursor(blank, new Point(0,0), "invisible");
 		}
 
+		//O ponteiro atravessa toda a hierarquia da janela: um componente que
+		//nao tenha o cursor definido mostra o do sistema
 		setCursor(cursor);
 
 		if (getContentPane() != null)
 		{
 			getContentPane().setCursor(cursor);
 		}
+		if (getRootPane() != null)
+		{
+			getRootPane().setCursor(cursor);
+			getRootPane().getLayeredPane().setCursor(cursor);
+			getRootPane().getGlassPane().setCursor(cursor);
+		}
+	}
+
+	/***********************************************************
+	*Name: keepCursorHidden
+	*Description: keeps repeating the hiding for a while. Entering fullscreen
+	*             on macOS is animated and only finishes about a second later,
+	*             and the system brings its own pointer back when it does, so
+	*             hiding it once, before the animation, is not enough.
+	*Parameters: none
+	*Return: none
+	************************************************************/
+	private void keepCursorHidden()
+	{
+		if (cursorTimer != null)
+		{
+			cursorTimer.stop();
+		}
+
+		cursorTimer = new javax.swing.Timer(400, new java.awt.event.ActionListener()
+		{
+			public void actionPerformed(java.awt.event.ActionEvent evento)
+			{
+				hideCursor();
+			}
+		});
+		cursorTimer.start();
+
+		//Trocar de aplicativo e voltar tambem devolve o ponteiro do sistema
+		addWindowFocusListener(new java.awt.event.WindowAdapter()
+		{
+			public void windowGainedFocus(java.awt.event.WindowEvent evento)
+			{
+				hideCursor();
+			}
+		});
 	}
 
 	/***********************************************************
@@ -578,6 +630,12 @@ public class JGWindowManager extends JFrame
 				frontBuffer.flush();
 				frontBuffer = null;
 			}
+		}
+
+		if (cursorTimer != null)
+		{
+			cursorTimer.stop();
+			cursorTimer = null;
 		}
 
 		windowTitle = null;
