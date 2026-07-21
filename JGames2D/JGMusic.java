@@ -13,6 +13,7 @@ import java.io.ByteArrayInputStream;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.util.Map;
 import javazoom.jlgui.basicplayer.BasicController;
@@ -126,6 +127,7 @@ public class JGMusic
 	 private AVAudioPlayerDelegate delegate      = null;
 	 private boolean               playing       = false;
 	 private byte[]                data          = null;
+	 private String                musicName     = null;
 
 
 	/***********************************************************
@@ -134,9 +136,10 @@ public class JGMusic
 	*Parameters: URL
 	*Return: None
 	************************************************************/
-    private JGMusic(URL url) throws BasicPlayerException 
+    private JGMusic(URL url) throws BasicPlayerException, IOException
     {
         this.url = url;
+        this.musicName = url.getPath();
         player = new BasicPlayer();
         player.addBasicPlayerListener(new Listener(this));
 
@@ -149,11 +152,44 @@ public class JGMusic
         // If the URL appears to be inside the jar the app is run from, then
         // load it via getResourceAsStream().
         if (urlStr.contains(IN_JAR_MARKER)) {
+            // O fluxo de dentro de um jar nao aceita mark e reset, que o
+            // AudioSystem usa para reconhecer o formato. Le tudo para a
+            // memoria e reaproveita o caminho que ja existe para os dados.
+            // Anular a url tambem conserta o relanco do loop, que voltaria a
+            // abrir pela url e falharia da mesma forma.
             int startOfResource = urlStr.indexOf(IN_JAR_MARKER) + IN_JAR_MARKER.length();
-            player.open(JGMusic.class.getResourceAsStream(urlStr.substring(startOfResource)));
+            data = readAll(JGMusic.class.getResourceAsStream(urlStr.substring(startOfResource)));
+            this.url = null;
+            player.open(new ByteArrayInputStream(data));
         } else {
             player.open(this.url);
         }
+    }
+
+    /***********************************************************
+	*Name: readAll
+	*Description: reads a whole stream into memory
+	*Parameters: InputStream
+	*Return: byte[]
+	************************************************************/
+    private static byte[] readAll(InputStream stream) throws IOException
+    {
+        if (stream == null)
+        {
+            throw new IOException("recurso de musica nao encontrado dentro do jar");
+        }
+
+        java.io.ByteArrayOutputStream saida = new java.io.ByteArrayOutputStream();
+        byte[] pedaco = new byte[16384];
+        int lidos;
+
+        while ((lidos = stream.read(pedaco)) > 0)
+        {
+            saida.write(pedaco, 0, lidos);
+        }
+        stream.close();
+
+        return saida.toByteArray();
     }
     
     /***********************************************************
@@ -164,7 +200,7 @@ public class JGMusic
 	************************************************************/
     public String getMusicName()
     {
-       return url.getPath();
+       return musicName;
     }
 
     /***********************************************************
@@ -203,8 +239,9 @@ public class JGMusic
         try {
             JGMusic player = new JGMusic(url);
             return player;
-        } catch (BasicPlayerException exc) {
-           
+        } catch (Exception exc) {
+            //Sem isto a falha ficava invisivel e a cena so quebrava depois
+            JGLog.writeLog("ERROR LOAD MUSIC " + url + " : " + exc + "\n");
             return null;
         }
     }

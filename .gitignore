@@ -2,3 +2,6 @@ LOG.txt
 *.class
 bin/
 out/
+build/
+*.jar
+!Libs/*.jar
