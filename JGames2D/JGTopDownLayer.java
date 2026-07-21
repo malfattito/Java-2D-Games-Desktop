@@ -1,5 +1,5 @@
 /***********************************************************************
-*Name: JGGTALayer
+*Name: JGTopDownLayer
 *Description: tile layer seen from above with perspective, in the style of
 *             the first GTA. The floor is a grid aligned with the screen, and
 *             each cell may carry a stack of blocks. The camera looks straight
@@ -20,7 +20,7 @@ import java.awt.image.BufferedImage;
 import java.net.URL;
 import java.util.HashMap;
 
-public class JGGTALayer extends JGLayer
+public class JGTopDownLayer extends JGLayer
 {
 	//Class attributes
 	private int[] vetHeights = null;
@@ -37,24 +37,24 @@ public class JGGTALayer extends JGLayer
 	private int visibleCount = 0;
 
 	/***********************************************************
-	*Name: JGGTALayer
+	*Name: JGTopDownLayer
 	*Description: constructor
 	*Parameters: JGEngine, JGVector2D
 	*Return: none
 	************************************************************/
-	public JGGTALayer(JGEngine manager, JGVector2D blockSize)
+	public JGTopDownLayer(JGEngine manager, JGVector2D blockSize)
 	{
 		super(manager, blockSize);
 		faceTransform = new AffineTransform();
 	}
 
 	/***********************************************************
-	*Name: JGGTALayer
+	*Name: JGTopDownLayer
 	*Description: constructor
 	*Parameters: JGEngine, JGVector2D, JGVector2D
 	*Return: none
 	************************************************************/
-	public JGGTALayer(JGEngine manager, JGVector2D layerSize, JGVector2D blockSize)
+	public JGTopDownLayer(JGEngine manager, JGVector2D layerSize, JGVector2D blockSize)
 	{
 		super(manager, layerSize, blockSize);
 		faceTransform = new AffineTransform();
@@ -145,7 +145,7 @@ public class JGGTALayer extends JGLayer
 
 		if (heightImage == null || heightImage.getImage() == null)
 		{
-			throw new IllegalArgumentException("JGGTALayer: nao foi possivel carregar o mapa de alturas " + fileName);
+			throw new IllegalArgumentException("JGTopDownLayer: nao foi possivel carregar o mapa de alturas " + fileName);
 		}
 
 		BufferedImage pixelImage = heightImage.getImage();
@@ -154,7 +154,7 @@ public class JGGTALayer extends JGLayer
 
 		if (imageWidth != (int)layerSize.getX() || imageHeight != (int)layerSize.getY())
 		{
-			throw new IllegalArgumentException("JGGTALayer: o mapa de alturas e " + imageWidth + "x" + imageHeight +
+			throw new IllegalArgumentException("JGTopDownLayer: o mapa de alturas e " + imageWidth + "x" + imageHeight +
 			                                   " e o mapa do chao e " + (int)layerSize.getX() + "x" + (int)layerSize.getY() +
 			                                   ". Os dois precisam ter o mesmo tamanho.");
 		}

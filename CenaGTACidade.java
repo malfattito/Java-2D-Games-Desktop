@@ -5,7 +5,7 @@ import java.awt.event.KeyEvent;
 import java.net.URL;
 
 import JGames2D.JGColorIndex;
-import JGames2D.JGGTALayer;
+import JGames2D.JGTopDownLayer;
 import JGames2D.JGLevel;
 import JGames2D.JGVector2D;
 
@@ -20,7 +20,7 @@ public class CenaGTACidade extends JGLevel
 	//INDICE DO TILE USADO NAS PAREDES
 	private static final int TILE_PAREDE = 8;
 
-	private JGGTALayer cidade = null;
+	private JGTopDownLayer cidade = null;
 
 	private URL getURL(String arquivo)
 	{
@@ -49,7 +49,7 @@ public class CenaGTACidade extends JGLevel
 		cores[11] = new JGColorIndex(11, new Color(0x8B4513));  //TERRA
 
 		//CRIA A CAMADA COM O MAPA DO CHAO
-		cidade = createGTALayer(getURL("/Images/gta_city_tiles.png"),
+		cidade = createTopDownLayer(getURL("/Images/gta_city_tiles.png"),
 		                        getURL("/Images/gta_city_map.png"),
 		                        cores,
 		                        new JGVector2D(LADO_BLOCO, LADO_BLOCO),

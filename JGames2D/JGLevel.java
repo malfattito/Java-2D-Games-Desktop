@@ -187,17 +187,17 @@ public abstract class JGLevel
 	}
 	
 	/***********************************************************
-	*Name: createGTALayer()
+	*Name: createTopDownLayer()
 	*Description: create a top view layer with perspective, in the style of
 	*             the first GTA, from a color image
 	*Parameters: URL, URL, JGColorIndex[], JGVector2D, boolean
-	*Return: JGGTALayer
+	*Return: JGTopDownLayer
 	************************************************************/
-	public JGGTALayer createGTALayer(URL tileImage, URL layerImage, JGColorIndex[] colors, JGVector2D blockSize, boolean autoRender)
+	public JGTopDownLayer createTopDownLayer(URL tileImage, URL layerImage, JGColorIndex[] colors, JGVector2D blockSize, boolean autoRender)
 	{
-		JGGTALayer layer = new JGGTALayer(gameManager, blockSize);
+		JGTopDownLayer layer = new JGTopDownLayer(gameManager, blockSize);
 
-		return (JGGTALayer)buildLayer(layer, tileImage, layerImage, colors, autoRender);
+		return (JGTopDownLayer)buildLayer(layer, tileImage, layerImage, colors, autoRender);
 	}
 
 	/***********************************************************
