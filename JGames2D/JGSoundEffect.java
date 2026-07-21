@@ -38,6 +38,16 @@ public class JGSoundEffect
 	************************************************************/
 	JGSoundEffect(URL file)
 	{
+		if (file == null)
+		{
+			//Fica mudo, mas o jogo continua rodando e o motivo fica no log
+			fileName = "";
+			clips = null;
+			JGLog.writeLog("ERROR LOAD SOUND: arquivo nao encontrado (URL nula). " +
+			               "Confira se a pasta Sounds esta no classpath.\n");
+			return;
+		}
+
 		fileName = file.getPath();
 
 		try

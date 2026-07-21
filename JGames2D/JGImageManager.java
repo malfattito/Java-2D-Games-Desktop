@@ -46,9 +46,9 @@ public class JGImageManager
 	************************************************************/
 	public static JGImage loadImage(URL pName)
 	{
-		if (pName == null)
+		if (pName == null || vetImages == null)
 		{
-			JGLog.writeLog("ERROR LOAD IMAGE: URL nula\n");
+			JGLog.writeLog("ERROR LOAD IMAGE: URL nula ou gerenciador ja liberado\n");
 			return null;
 		}
 

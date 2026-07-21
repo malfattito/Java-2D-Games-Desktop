@@ -44,6 +44,13 @@ public class JGSoundManager
 	************************************************************/
 	public static JGSoundEffect loadSoundEffect(URL pName)
 	{
+		if (pName == null)
+		{
+			//Devolve um efeito mudo em vez de null: assim a cena que chamar
+			//play() nao quebra, e o erro fica registrado
+			return new JGSoundEffect(null);
+		}
+
 		//try to recycle a sound effect
 		for (JGSoundEffect sound : vetSoundEffects)
 		{
@@ -68,6 +75,13 @@ public class JGSoundManager
 	************************************************************/
 	public static JGMusic loadMusic(URL pName)
 	{
+		if (pName == null)
+		{
+			JGLog.writeLog("ERROR LOAD MUSIC: arquivo nao encontrado (URL nula). " +
+			               "Confira se a pasta Sounds esta no classpath.\n");
+			return null;
+		}
+
 		//try to recycle a sound effect
 		for (JGMusic music : vetMusics)
 		{
