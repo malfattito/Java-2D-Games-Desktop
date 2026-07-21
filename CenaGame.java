@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.Random;
 
 import JGames2D.JGColorIndex;
-import JGames2D.JGLayer;
+import JGames2D.JGVHLayer;
 import JGames2D.JGLevel;
 import JGames2D.JGMusic;
 import JGames2D.JGSoundEffect;
@@ -21,7 +21,7 @@ public class CenaGame extends JGLevel
 {
 	//Declara os objetos visuais da cena
 	private JGSprite aviao = null;
-	private JGLayer layer = null;
+	private JGVHLayer layer = null;
 	private ArrayList<JGSprite> vetInimigos = null;
 	private ArrayList<JGSprite> vetTiros = null;
 	private ArrayList<JGSprite> vetExplosoes = null;
@@ -118,7 +118,7 @@ public class CenaGame extends JGLevel
 		vetCores[8] = new JGColorIndex(9,new Color(175,0,0));
 		vetCores[9] = new JGColorIndex(10,new Color(0,175,0));
 		
-		layer = createLayer(getClass().getResource("/Images/spr_elements.png"),
+		layer = createVHLayer(getClass().getResource("/Images/spr_elements.png"),
 									getClass().getResource("/Images/lay_level.bmp"), 
 									vetCores, new JGVector2D(32, 32), true);
 		

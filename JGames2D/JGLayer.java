@@ -1,10 +1,11 @@
 /***********************************************************************
 *Name: JGLayer
-*Description: represents a tile layer built from a tileset
+*Description: base of the tile layers. Holds the tileset, the block map and
+*             the scrolling state; each subclass decides how the blocks are
+*             placed on the screen.
 *Author: Silvano Malfatti
 *Date: 01/05/20
 ************************************************************************/
-
 
 //Package declaration
 package JGames2D;
@@ -15,26 +16,27 @@ import java.awt.image.BufferedImage;
 import java.net.URL;
 import java.util.HashMap;
 
-public class JGLayer 
+public abstract class JGLayer
 {
 	//Class attributes
 	public JGVector2D offset = null;
 	public JGVector2D speed = null;
-	private JGEngine gameManager = null;
-	private JGFrameIndex[] vetBlocks = null;
-	private JGVector2D blockSize = null;
-	private JGVector2D layerSize = null;
-	private JGImage tileImage = null;
-	private JGColorIndex[] vetColorIndex = null;
-	private boolean visible = false;
-	private boolean autoRender = false;
-	private int tileColumns = 0;
-	private BufferedImage[] vetTiles = null;
-	
+	protected JGEngine gameManager = null;
+	protected JGFrameIndex[] vetBlocks = null;
+	protected JGVector2D blockSize = null;
+	protected JGVector2D layerSize = null;
+	protected JGImage tileImage = null;
+	protected JGColorIndex[] vetColorIndex = null;
+	protected boolean visible = false;
+	protected boolean autoRender = false;
+	protected int tileColumns = 0;
+	protected BufferedImage[] vetTiles = null;
+
 	/***********************************************************
 	*Name: JGLayer
-	*Description: constructor
-	*Parameters: JGGameManager, JGVector2D
+	*Description: constructor used when the map comes from a color image,
+	*             which is the one that defines the layer size
+	*Parameters: JGEngine, JGVector2D
 	*Return: none
 	************************************************************/
 	public JGLayer(JGEngine manager, JGVector2D blockSize)
@@ -50,11 +52,12 @@ public class JGLayer
 		visible = true;
 		autoRender = false;
 	}
-	
+
 	/***********************************************************
 	*Name: JGLayer
-	*Description: constructor
-	*Parameters: JGGameManager, JGVector2D, JGVector2D
+	*Description: constructor used when the map is filled by the game,
+	*             block by block
+	*Parameters: JGEngine, JGVector2D, JGVector2D
 	*Return: none
 	************************************************************/
 	public JGLayer(JGEngine manager, JGVector2D layerSize, JGVector2D blockSize)
@@ -74,7 +77,34 @@ public class JGLayer
 		visible = true;
 		autoRender = false;
 	}
-	
+
+	/***********************************************************
+	*Name: render
+	*Description: draws the visible part of the layer. Each subclass places
+	*             the blocks according to its own projection.
+	*Parameters: none
+	*Return: void
+	************************************************************/
+	public abstract void render();
+
+	/***********************************************************
+	*Name: cellToScreen
+	*Description: top left corner, on the screen, of the block at the given
+	*             map coordinates
+	*Parameters: int, int
+	*Return: JGVector2D
+	************************************************************/
+	public abstract JGVector2D cellToScreen(int column, int line);
+
+	/***********************************************************
+	*Name: screenToCell
+	*Description: map coordinates of the block under a screen position.
+	*             Base of the collision between the game objects and the map.
+	*Parameters: double, double
+	*Return: JGVector2D
+	************************************************************/
+	public abstract JGVector2D screenToCell(double screenX, double screenY);
+
 	/***********************************************************
 	*Name: setColorIndex
 	*Description: defines the color index to create the layer
@@ -85,10 +115,10 @@ public class JGLayer
 	{
 		vetColorIndex = colorIndex;
 	}
-	
+
 	/***********************************************************
 	*Name: getLayerSize
-	*Description: returns the layer size
+	*Description: returns the layer size, in blocks
 	*Parameters: none
 	*Return: JGVector2D
 	************************************************************/
@@ -96,10 +126,10 @@ public class JGLayer
 	{
 		return layerSize;
 	}
-	
+
 	/***********************************************************
 	*Name: getBlockSize
-	*Description: returns the block size
+	*Description: returns the block size, in pixels
 	*Parameters: none
 	*Return: JGVector2D
 	************************************************************/
@@ -107,7 +137,7 @@ public class JGLayer
 	{
 		return blockSize;
 	}
-	
+
 	/***********************************************************
 	*Name: getOffset
 	*Description: returns the offset of the layer
@@ -118,32 +148,107 @@ public class JGLayer
 	{
 		return offset;
 	}
-	
+
 	/***********************************************************
 	*Name: setFrameIndex
-	*Description:sets the frame index by a specific position
+	*Description: sets the frame index by a specific position
 	*Parameters: int, int
 	*Return: none
 	************************************************************/
 	public void setFrameIndex(int index, int frameIndex)
 	{
+		if (vetBlocks == null || index < 0 || index >= vetBlocks.length)
+		{
+			return;
+		}
+
+		if (vetBlocks[index] == null)
+		{
+			vetBlocks[index] = new JGFrameIndex();
+		}
+
 		vetBlocks[index].setFrameIndex(frameIndex);
 	}
-	
+
 	/***********************************************************
 	*Name: getFrameIndexByPosition
-	*Description:returns the frame to the position index
+	*Description: returns the frame of a position in the block array
 	*Parameters: int
 	*Return: int
 	************************************************************/
 	public int getFrameIndexByPosition(int position)
 	{
+		if (vetBlocks == null || position < 0 || position >= vetBlocks.length ||
+			vetBlocks[position] == null)
+		{
+			return -1;
+		}
+
 		return vetBlocks[position].getFrameIndex();
 	}
-	
+
+	/***********************************************************
+	*Name: getFrameIndexByCell
+	*Description: frame of a block by map coordinates, repeating the map as
+	*             many times as needed, exactly as the drawing does
+	*Parameters: int, int
+	*Return: int
+	************************************************************/
+	public int getFrameIndexByCell(int column, int line)
+	{
+		int columns = (int)layerSize.getX();
+		int lines = (int)layerSize.getY();
+
+		if (columns <= 0 || lines <= 0)
+		{
+			return -1;
+		}
+
+		return getFrameIndexByPosition(wrap(column, columns) + wrap(line, lines) * columns);
+	}
+
+	/***********************************************************
+	*Name: getFrameIndexAt
+	*Description: frame of the block under a screen position, or -1 when
+	*             there is no block there. Used to test collisions with the map.
+	*Parameters: double, double
+	*Return: int
+	************************************************************/
+	public int getFrameIndexAt(double screenX, double screenY)
+	{
+		JGVector2D cell = screenToCell(screenX, screenY);
+
+		return getFrameIndexByCell((int)cell.getX(), (int)cell.getY());
+	}
+
+	/***********************************************************
+	*Name: isBlockAt
+	*Description: tells if there is a block under a screen position
+	*Parameters: double, double
+	*Return: boolean
+	************************************************************/
+	public boolean isBlockAt(double screenX, double screenY)
+	{
+		return getFrameIndexAt(screenX, screenY) >= 0;
+	}
+
+	/***********************************************************
+	*Name: wrap
+	*Description: keeps an index inside the map, repeating it in both
+	*             directions. Java gives a negative rest for negative values.
+	*Parameters: int, int
+	*Return: int
+	************************************************************/
+	protected static int wrap(int value, int size)
+	{
+		int rest = value % size;
+
+		return (rest < 0) ? rest + size : rest;
+	}
+
 	/***********************************************************
 	*Name: getAutoRender
-	*Description:returns the frame to the position index
+	*Description: tells if the level draws this layer automatically
 	*Parameters: none
 	*Return: boolean
 	************************************************************/
@@ -151,10 +256,10 @@ public class JGLayer
 	{
 		return autoRender;
 	}
-	
+
 	/***********************************************************
 	*Name: setAutoRender
-	*Description:set the frame to the position index
+	*Description: defines if the level draws this layer automatically
 	*Parameters: boolean
 	*Return: none
 	************************************************************/
@@ -162,7 +267,7 @@ public class JGLayer
 	{
 		this.autoRender = autoRender;
 	}
-	
+
 	/***********************************************************
 	*Name: setVisible
 	*Description: configures the visibility of the layer
@@ -173,7 +278,7 @@ public class JGLayer
 	{
 		this.visible = visible;
 	}
-	
+
 	/***********************************************************
 	*Name: getVisible
 	*Description: getter of visibility of the layer
@@ -184,7 +289,7 @@ public class JGLayer
 	{
 		return visible;
 	}
-	
+
 	/***********************************************************
 	*Name: setTileImage
 	*Description: set the image used to the tiles
@@ -242,7 +347,7 @@ public class JGLayer
 			graphics.dispose();
 		}
 	}
-	
+
 	/***********************************************************
 	*Name: setSpeed
 	*Description: set the layer speed
@@ -253,7 +358,7 @@ public class JGLayer
 	{
 		this.speed = speed;
 	}
-	
+
 	/***********************************************************
 	*Name: scrollLayer
 	*Description: scroll the layer with the current speed
@@ -265,14 +370,14 @@ public class JGLayer
 		offset.setX(offset.getX() + speed.getX());
 		offset.setY(offset.getY() + speed.getY());
 	}
-	
+
 	/***********************************************************
 	*Name: drawBlock
-	*Description: int, int, int, Graphics2D
-	*Parameters: none
+	*Description: draws one block of the tileset at a screen position
+	*Parameters: int, int, int, Graphics2D
 	*Return: void
 	************************************************************/
-	private void drawBlock(int frameIndex, int x, int y, Graphics2D g2d)
+	protected void drawBlock(int frameIndex, int x, int y, Graphics2D g2d)
 	{
 		if (frameIndex < 0 || frameIndex >= vetTiles.length)
 		{
@@ -281,9 +386,27 @@ public class JGLayer
 
 		g2d.drawImage(vetTiles[frameIndex], x, y, null);
 	}
-	
+
 	/***********************************************************
-	*Name: createLayer()
+	*Name: isReadyToRender
+	*Description: tells if the layer has everything it needs to be drawn
+	*Parameters: none
+	*Return: boolean
+	************************************************************/
+	protected boolean isReadyToRender()
+	{
+		if (!visible || vetBlocks == null || tileImage == null || vetTiles == null)
+		{
+			return false;
+		}
+
+		//Sem tamanho de bloco valido o desenho dividiria por zero
+		return blockSize.getX() > 0 && blockSize.getY() > 0 &&
+			   layerSize.getX() > 0 && layerSize.getY() > 0;
+	}
+
+	/***********************************************************
+	*Name: createLayer
 	*Description: create a layer based in a color image
 	*Parameters: URL
 	*Return: void
@@ -346,75 +469,7 @@ public class JGLayer
 		//O mapa de cores so e necessario durante a construcao da layer
 		JGImageManager.free(indexImage);
 	}
-	
-	/***********************************************************
-	*Name: render()
-	*Description: create a layer based in a color image
-	*Parameters: Graphics2D
-	*Return: void
-	************************************************************/
-	public void  render()
-	{
-		int xBlock = 0;
-		int yBlock = 0;
-		double xPosition = 0.0f;
-		double offsetX = offset.getX();
-		double offsetY = offset.getY();
-		double layerSizeX = layerSize.getX();
-		double layerSizeY = layerSize.getY();
 
-		//Retorna se a layer nao estiver visivel ou ainda nao tiver blocos
-		if (!visible || vetBlocks == null || tileImage == null || vetTiles == null)
-		{
-			return;
-		}
-
-		//Sem tamanho de bloco valido o desenho dividiria por zero
-		if (blockSize.getX() <= 0 || blockSize.getY() <= 0 || layerSizeX <= 0 || layerSizeY <= 0)
-		{
-			return;
-		}
-
-		//Calcula o início da layer em x caso offset seja menor que zero
-		if (offsetX > 0)
-		{	
-			int mult = (int)Math.ceil(Math.abs(offsetX) / blockSize.getX());
-			xBlock = ((int)layerSizeX - ((mult % (int)layerSizeX))) == (int)layerSizeX ? 0 : ((int)layerSizeX - ((mult % (int)layerSizeX))); 
-			offsetX -= mult * blockSize.getX();
-		}
-		//Guarda o início do offset e o brick inicial em X
-		xPosition = offsetX;
-		
-		//Calcula o início da layer em y caso offset seja menor que zero
-		if (offsetY > 0)
-		{
-			int mult = (int)Math.ceil(Math.abs(offsetY) / blockSize.getY());
-			yBlock = ((int)layerSizeY - ((mult % (int)layerSizeY))) == (int)layerSizeY ? 0 : ((int)layerSizeY - ((mult % (int)layerSizeY))); 
-			offsetY -= mult * blockSize.getY();
-		}
-		
-		//Desenha todos os bricks da layer.
-		//getResolutionWidth/Height sao a area de desenho: getWidth/getHeight
-		//da janela incluiriam as bordas e a barra de titulo.
-		int screenWidth = gameManager.windowManager.getResolutionWidth();
-		int screenHeight = gameManager.windowManager.getResolutionHeight();
-
-		for(int iStartX = xBlock; offsetY < screenHeight;
-				                  yBlock = (yBlock+1)%(int)layerSizeY,
-				                  offsetY += blockSize.getY(),
-				                  xBlock = iStartX,offsetX = xPosition)
-		{
-			for( ; offsetX < screenWidth; xBlock = (xBlock+1)%(int)layerSizeX, offsetX += blockSize.getX())
-			{
-				int blockIndex = xBlock + (yBlock * (int)layerSizeX);
-				if (vetBlocks[blockIndex] != null)
-				{
-					drawBlock(vetBlocks[blockIndex].getFrameIndex(), (int) offsetX, (int) offsetY, gameManager.graphics);	
-				}
-			}
-		}
-	}
-	
 	/*******************************************
    	* Name: free
    	* Description: free resources

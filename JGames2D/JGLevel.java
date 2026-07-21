@@ -107,15 +107,40 @@ public abstract class JGLevel
 	}
 	
 	/***********************************************************
-	*Name: createLayer()
-	*Description: create a layer
+	*Name: createVHLayer()
+	*Description: create a vertical/horizontal layer from a color image
 	*Parameters: JGVector2D, boolean
 	*Return: JGLayer
 	************************************************************/
-	public JGLayer createLayer(URL tileImage, URL layerImage, JGColorIndex[] colors, JGVector2D blockSize, boolean autoRender)
+	public JGVHLayer createVHLayer(URL tileImage, URL layerImage, JGColorIndex[] colors, JGVector2D blockSize, boolean autoRender)
 	{
-		JGLayer layer = new JGLayer(gameManager, blockSize);
-		
+		JGVHLayer layer = new JGVHLayer(gameManager, blockSize);
+
+		return (JGVHLayer)buildLayer(layer, tileImage, layerImage, colors, autoRender);
+	}
+
+	/***********************************************************
+	*Name: createIsoLayer()
+	*Description: create an isometric layer from a color image
+	*Parameters: URL, URL, JGColorIndex[], JGVector2D, boolean
+	*Return: JGIsoLayer
+	************************************************************/
+	public JGIsoLayer createIsoLayer(URL tileImage, URL layerImage, JGColorIndex[] colors, JGVector2D blockSize, boolean autoRender)
+	{
+		JGIsoLayer layer = new JGIsoLayer(gameManager, blockSize);
+
+		return (JGIsoLayer)buildLayer(layer, tileImage, layerImage, colors, autoRender);
+	}
+
+	/***********************************************************
+	*Name: buildLayer()
+	*Description: finishes a layer built from a color image, whatever its
+	*             projection, and registers it in the level
+	*Parameters: JGLayer, URL, URL, JGColorIndex[], boolean
+	*Return: JGLayer
+	************************************************************/
+	private JGLayer buildLayer(JGLayer layer, URL tileImage, URL layerImage, JGColorIndex[] colors, boolean autoRender)
+	{
 		layer.setTileImage(tileImage);
 		layer.setColorIndex(colors);
 		layer.createLayer(layerImage);
@@ -127,14 +152,32 @@ public abstract class JGLevel
 	}
 	
 	/***********************************************************
-	*Name: createLayer()
-	*Description: create a layer
+	*Name: createVHLayer()
+	*Description: create a vertical/horizontal layer from a color image
 	*Parameters: JGVector2D, JGVector2D, boolean
 	*Return: None
 	************************************************************/
-	public JGLayer createLayer(URL tileImage, JGVector2D layerSize, JGVector2D blockSize, boolean autoRender)
+	public JGVHLayer createVHLayer(URL tileImage, JGVector2D layerSize, JGVector2D blockSize, boolean autoRender)
 	{
-		JGLayer layer = new JGLayer(gameManager, layerSize, blockSize);
+		JGVHLayer layer = new JGVHLayer(gameManager, layerSize, blockSize);
+		layer.setTileImage(tileImage);
+
+		layer.setAutoRender(autoRender);
+		vetLayers.add(layer);
+
+		return layer;
+	}
+
+	/***********************************************************
+	*Name: createIsoLayer()
+	*Description: create an empty isometric layer, to be filled by the game
+	*             with setFrameIndex()
+	*Parameters: URL, JGVector2D, JGVector2D, boolean
+	*Return: JGIsoLayer
+	************************************************************/
+	public JGIsoLayer createIsoLayer(URL tileImage, JGVector2D layerSize, JGVector2D blockSize, boolean autoRender)
+	{
+		JGIsoLayer layer = new JGIsoLayer(gameManager, layerSize, blockSize);
 		layer.setTileImage(tileImage);
 
 		layer.setAutoRender(autoRender);
