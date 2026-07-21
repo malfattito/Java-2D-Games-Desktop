@@ -26,6 +26,7 @@ public class JGTopDownLayer extends JGLayer
 	private int[] vetHeights = null;
 	private int maxHeight = 0;
 	private int wallFrameIndex = -1;
+	private HashMap<Integer, Integer> wallByRoof = new HashMap<Integer, Integer>();
 	private double perspective = 0.12;
 	private JGVector2D cameraCenter = null;
 	private AffineTransform faceTransform = null;
@@ -122,14 +123,41 @@ public class JGTopDownLayer extends JGLayer
 
 	/***********************************************************
 	*Name: setWallFrameIndex
-	*Description: tile used on the walls of every building. The roof keeps
-	*             using the tile the cell has on the map.
+	*Description: tile used on the walls of the buildings that do not have a
+	*             wall of their own. The roof keeps using the tile the cell
+	*             has on the map.
 	*Parameters: int
 	*Return: none
 	************************************************************/
 	public void setWallFrameIndex(int wallFrameIndex)
 	{
 		this.wallFrameIndex = wallFrameIndex;
+	}
+
+	/***********************************************************
+	*Name: setWallFrameIndex
+	*Description: wall of one kind of building. The roof on the map says which
+	*             building it is, so a city can mix walls of several colors
+	*             and window shapes without needing another map.
+	*Parameters: int, int
+	*Return: none
+	************************************************************/
+	public void setWallFrameIndex(int roofFrameIndex, int wallFrameIndex)
+	{
+		wallByRoof.put(Integer.valueOf(roofFrameIndex), Integer.valueOf(wallFrameIndex));
+	}
+
+	/***********************************************************
+	*Name: getWallFrameIndex
+	*Description: wall that matches a roof, or the general one
+	*Parameters: int
+	*Return: int
+	************************************************************/
+	private int getWallFrameIndex(int roofFrameIndex)
+	{
+		Integer parede = wallByRoof.get(Integer.valueOf(roofFrameIndex));
+
+		return (parede != null) ? parede.intValue() : wallFrameIndex;
 	}
 
 	/***********************************************************
@@ -494,6 +522,8 @@ public class JGTopDownLayer extends JGLayer
 	private void drawBuilding(int column, int line, int height,
 	                          double cameraX, double cameraY, Graphics2D graphics)
 	{
+		int roofIndex = getFrameIndexByCell(column, line);
+		int wallIndex = getWallFrameIndex(roofIndex);
 		double blockWidth = blockSize.getX();
 		double blockHeight = blockSize.getY();
 		double x = offset.getX() + column * blockWidth;
@@ -521,14 +551,14 @@ public class JGTopDownLayer extends JGLayer
 			{
 				if (westHeight <= floor)
 				{
-					drawFace(baseX, baseY, 0, blockHeight, stepX, stepY, graphics);
+					drawFace(wallIndex, baseX, baseY, 0, blockHeight, stepX, stepY, graphics);
 				}
 			}
 			else if (stepX < 0)
 			{
 				if (eastHeight <= floor)
 				{
-					drawFace(baseX + blockWidth, baseY, 0, blockHeight, stepX, stepY, graphics);
+					drawFace(wallIndex, baseX + blockWidth, baseY, 0, blockHeight, stepX, stepY, graphics);
 				}
 			}
 
@@ -536,21 +566,19 @@ public class JGTopDownLayer extends JGLayer
 			{
 				if (northHeight <= floor)
 				{
-					drawFace(baseX, baseY, blockWidth, 0, stepX, stepY, graphics);
+					drawFace(wallIndex, baseX, baseY, blockWidth, 0, stepX, stepY, graphics);
 				}
 			}
 			else if (stepY < 0)
 			{
 				if (southHeight <= floor)
 				{
-					drawFace(baseX, baseY + blockHeight, blockWidth, 0, stepX, stepY, graphics);
+					drawFace(wallIndex, baseX, baseY + blockHeight, blockWidth, 0, stepX, stepY, graphics);
 				}
 			}
 		}
 
 		//O telhado usa o tile que a celula tem no mapa
-		int roofIndex = getFrameIndexByCell(column, line);
-
 		if (roofIndex >= 0)
 		{
 			drawBlock(roofIndex, (int)(x + stepX * height), (int)(y + stepY * height), graphics);
@@ -562,19 +590,19 @@ public class JGTopDownLayer extends JGLayer
 	*Description: paints the wall tile over one face of a floor. The face is
 	*             a parallelogram, so an AffineTransform maps the tile onto it
 	*             without any deformation of the pixels being needed by hand.
-	*Parameters: double, double, double, double, double, double, Graphics2D
+	*Parameters: int, double, double, double, double, double, double, Graphics2D
 	*Return: void
 	************************************************************/
-	private void drawFace(double originX, double originY, double edgeX, double edgeY,
+	private void drawFace(int wallIndex, double originX, double originY, double edgeX, double edgeY,
 	                      double riseX, double riseY, Graphics2D graphics)
 	{
-		if (wallFrameIndex < 0 || vetTiles == null ||
-			wallFrameIndex >= vetTiles.length || vetTiles[wallFrameIndex] == null)
+		if (wallIndex < 0 || vetTiles == null ||
+			wallIndex >= vetTiles.length || vetTiles[wallIndex] == null)
 		{
 			return;
 		}
 
-		BufferedImage wall = vetTiles[wallFrameIndex];
+		BufferedImage wall = vetTiles[wallIndex];
 
 		//(s,t) da textura vai para origem + s*aresta + t*subida
 		faceTransform.setTransform(edgeX / wall.getWidth(),  edgeY / wall.getWidth(),
@@ -594,6 +622,7 @@ public class JGTopDownLayer extends JGLayer
 	{
 		super.free();
 		vetHeights = null;
+		wallByRoof.clear();
 		cameraCenter = null;
 		faceTransform = null;
 	}
