@@ -22,6 +22,26 @@ public class CenaGTACidade extends JGLevel
 
 	private JGTopDownLayer cidade = null;
 
+	//NIVEL PARA ONDE O ESC VOLTA. NEGATIVO ENCERRA O JOGO.
+	private int nivelDeRetorno = -1;
+
+	/***********************************************************
+	*CONSTRUTOR PADRAO: O ESC ENCERRA. USADO PELA DEMONSTRACAO ISOLADA.
+	************************************************************/
+	public CenaGTACidade()
+	{
+		this(-1);
+	}
+
+	/***********************************************************
+	*CONSTRUTOR QUE RECEBE O NIVEL DE RETORNO DO ESC, PARA A CENA
+	*PODER SER USADA DENTRO DO JOGO, VOLTANDO AO MENU.
+	************************************************************/
+	public CenaGTACidade(int nivelDeRetorno)
+	{
+		this.nivelDeRetorno = nivelDeRetorno;
+	}
+
 	private URL getURL(String arquivo)
 	{
 		return getClass().getResource(arquivo);
@@ -74,10 +94,17 @@ public class CenaGTACidade extends JGLevel
 	@Override
 	public void execute()
 	{
-		//ESC ENCERRA
+		//ESC VOLTA AO MENU, OU ENCERRA SE NAO HOUVER NIVEL DE RETORNO
 		if (gameManager.inputManager.keyTyped(KeyEvent.VK_ESCAPE))
 		{
-			gameManager.finish();
+			if (nivelDeRetorno >= 0)
+			{
+				gameManager.setCurrentLevel(nivelDeRetorno);
+			}
+			else
+			{
+				gameManager.finish();
+			}
 			return;
 		}
 
@@ -119,7 +146,8 @@ public class CenaGTACidade extends JGLevel
 		gameManager.graphics.drawLine(centroX, centroY - 10, centroX, centroY + 10);
 
 		gameManager.graphics.setColor(Color.white);
-		gameManager.graphics.drawString("SETAS: ANDAR PELA CIDADE     A / Z: PERSPECTIVA     ESC: SAIR", 20, 30);
+		gameManager.graphics.drawString("SETAS: ANDAR PELA CIDADE     A / Z: PERSPECTIVA     ESC: " +
+		                                (nivelDeRetorno >= 0 ? "MENU" : "SAIR"), 20, 30);
 		gameManager.graphics.drawString("PERSPECTIVA " + String.format("%.3f", cidade.getPerspective()) +
 		                                "     ANDARES SOB A MIRA: " + cidade.getHeightAt(centroX, centroY) +
 		                                (cidade.isWallAt(centroX, centroY) ? "  (PREDIO)" : "  (LIVRE)"), 20, 52);
