@@ -10,7 +10,7 @@ set -e
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$RAIZ"
 
-PRINCIPAL="${1:-GameTopDownPrincipal}"
+PRINCIPAL="${1:-GamePrincipal}"
 SAIDA="${2:-JGames2D.jar}"
 BUILD="build"
 
@@ -60,7 +60,4 @@ jar cfm "$SAIDA" "$BUILD/manifest.txt" -C "$BUILD/classes" .
 
 echo
 echo "pronto: $SAIDA  ($(du -h "$SAIDA" | cut -f1))"
-echo "  executar:            java -jar $SAIDA"
-echo "  outras principais:   java -cp $SAIDA GamePrincipal"
-echo "                       java -cp $SAIDA IsoPrincipal"
-echo "                       java -cp $SAIDA GTAPrincipal"
+echo "  executar: java -jar $SAIDA"
