@@ -187,6 +187,20 @@ public abstract class JGLevel
 	}
 	
 	/***********************************************************
+	*Name: createGTALayer()
+	*Description: create a top view layer with perspective, in the style of
+	*             the first GTA, from a color image
+	*Parameters: URL, URL, JGColorIndex[], JGVector2D, boolean
+	*Return: JGGTALayer
+	************************************************************/
+	public JGGTALayer createGTALayer(URL tileImage, URL layerImage, JGColorIndex[] colors, JGVector2D blockSize, boolean autoRender)
+	{
+		JGGTALayer layer = new JGGTALayer(gameManager, blockSize);
+
+		return (JGGTALayer)buildLayer(layer, tileImage, layerImage, colors, autoRender);
+	}
+
+	/***********************************************************
 	*Name: createSprite
 	*Description: create a visual object
 	*Parameters: JGVector2D, boolean

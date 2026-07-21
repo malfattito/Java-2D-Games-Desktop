@@ -1,0 +1,497 @@
+/***********************************************************************
+*Name: JGGTALayer
+*Description: tile layer seen from above with perspective, in the style of
+*             the first GTA. The floor is a grid aligned with the screen, and
+*             each cell may carry a stack of blocks. The camera looks straight
+*             down at one point of the screen: over that point only the roofs
+*             show, and the further a building is from it the more its walls
+*             open outwards.
+*Author: Silvano Malfatti
+*Date: 01/05/20
+************************************************************************/
+
+//Package declaration
+package JGames2D;
+
+//Used Packages
+import java.awt.Graphics2D;
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.net.URL;
+import java.util.HashMap;
+
+public class JGGTALayer extends JGLayer
+{
+	//Class attributes
+	private int[] vetHeights = null;
+	private int wallFrameIndex = -1;
+	private double perspective = 0.12;
+	private JGVector2D cameraCenter = null;
+	private AffineTransform faceTransform = null;
+
+	/***********************************************************
+	*Name: JGGTALayer
+	*Description: constructor
+	*Parameters: JGEngine, JGVector2D
+	*Return: none
+	************************************************************/
+	public JGGTALayer(JGEngine manager, JGVector2D blockSize)
+	{
+		super(manager, blockSize);
+		faceTransform = new AffineTransform();
+	}
+
+	/***********************************************************
+	*Name: JGGTALayer
+	*Description: constructor
+	*Parameters: JGEngine, JGVector2D, JGVector2D
+	*Return: none
+	************************************************************/
+	public JGGTALayer(JGEngine manager, JGVector2D layerSize, JGVector2D blockSize)
+	{
+		super(manager, layerSize, blockSize);
+		faceTransform = new AffineTransform();
+	}
+
+	/***********************************************************
+	*Name: cellToScreen
+	*Description: top left corner of a cell on the floor
+	*Parameters: int, int
+	*Return: JGVector2D
+	************************************************************/
+	public JGVector2D cellToScreen(int column, int line)
+	{
+		return new JGVector2D(offset.getX() + column * blockSize.getX(),
+				              offset.getY() + line * blockSize.getY());
+	}
+
+	/***********************************************************
+	*Name: screenToCell
+	*Description: cell of the floor under a screen position
+	*Parameters: double, double
+	*Return: JGVector2D
+	************************************************************/
+	public JGVector2D screenToCell(double screenX, double screenY)
+	{
+		return new JGVector2D(Math.floor((screenX - offset.getX()) / blockSize.getX()),
+				              Math.floor((screenY - offset.getY()) / blockSize.getY()));
+	}
+
+	/***********************************************************
+	*Name: setPerspective
+	*Description: how much the walls open outwards. Zero gives a flat top
+	*             view with no walls at all; the usual range is 0.05 to 0.25.
+	*Parameters: double
+	*Return: none
+	************************************************************/
+	public void setPerspective(double perspective)
+	{
+		this.perspective = perspective;
+	}
+
+	/***********************************************************
+	*Name: getPerspective
+	*Description: current opening of the walls
+	*Parameters: none
+	*Return: double
+	************************************************************/
+	public double getPerspective()
+	{
+		return perspective;
+	}
+
+	/***********************************************************
+	*Name: setCameraCenter
+	*Description: point of the screen the camera looks straight down at.
+	*             Pass null to keep it at the middle of the screen.
+	*Parameters: JGVector2D
+	*Return: none
+	************************************************************/
+	public void setCameraCenter(JGVector2D cameraCenter)
+	{
+		this.cameraCenter = cameraCenter;
+	}
+
+	/***********************************************************
+	*Name: setWallFrameIndex
+	*Description: tile used on the walls of every building. The roof keeps
+	*             using the tile the cell has on the map.
+	*Parameters: int
+	*Return: none
+	************************************************************/
+	public void setWallFrameIndex(int wallFrameIndex)
+	{
+		this.wallFrameIndex = wallFrameIndex;
+	}
+
+	/***********************************************************
+	*Name: createHeightMap
+	*Description: reads the height of each cell from a color image, the same
+	*             way createLayer() reads the floor. Here the index of the
+	*             color is the number of blocks stacked on the cell.
+	*Parameters: URL, JGColorIndex[]
+	*Return: none
+	************************************************************/
+	public void createHeightMap(URL fileName, JGColorIndex[] heightColors)
+	{
+		JGImage heightImage = JGImageManager.loadImage(fileName);
+
+		if (heightImage == null || heightImage.getImage() == null)
+		{
+			throw new IllegalArgumentException("JGGTALayer: nao foi possivel carregar o mapa de alturas " + fileName);
+		}
+
+		BufferedImage pixelImage = heightImage.getImage();
+		int imageWidth = pixelImage.getWidth();
+		int imageHeight = pixelImage.getHeight();
+
+		if (imageWidth != (int)layerSize.getX() || imageHeight != (int)layerSize.getY())
+		{
+			throw new IllegalArgumentException("JGGTALayer: o mapa de alturas e " + imageWidth + "x" + imageHeight +
+			                                   " e o mapa do chao e " + (int)layerSize.getX() + "x" + (int)layerSize.getY() +
+			                                   ". Os dois precisam ter o mesmo tamanho.");
+		}
+
+		HashMap<Integer, Integer> colorTable = new HashMap<Integer, Integer>();
+		for (int index = 0; index < heightColors.length; index++)
+		{
+			colorTable.put(heightColors[index].getColor().getRGB() & 0x00FFFFFF,
+					       heightColors[index].getFrameIndex());
+		}
+
+		vetHeights = new int[imageWidth * imageHeight];
+
+		for (int column = 0; column < imageWidth; column++)
+		{
+			for (int line = 0; line < imageHeight; line++)
+			{
+				Integer altura = colorTable.get(pixelImage.getRGB(column, line) & 0x00FFFFFF);
+				vetHeights[column + line * imageWidth] = (altura == null) ? 0 : altura.intValue();
+			}
+		}
+
+		//O mapa so e necessario durante a construcao
+		JGImageManager.free(heightImage);
+	}
+
+	/***********************************************************
+	*Name: setHeightByCell
+	*Description: sets how many blocks are stacked on a cell
+	*Parameters: int, int, int
+	*Return: none
+	************************************************************/
+	public void setHeightByCell(int column, int line, int height)
+	{
+		int columns = (int)layerSize.getX();
+		int lines = (int)layerSize.getY();
+
+		if (columns <= 0 || lines <= 0)
+		{
+			return;
+		}
+
+		if (vetHeights == null)
+		{
+			vetHeights = new int[columns * lines];
+		}
+
+		vetHeights[wrap(column, columns) + wrap(line, lines) * columns] = Math.max(0, height);
+	}
+
+	/***********************************************************
+	*Name: getHeightByCell
+	*Description: how many blocks are stacked on a cell, repeating the map
+	*Parameters: int, int
+	*Return: int
+	************************************************************/
+	public int getHeightByCell(int column, int line)
+	{
+		int columns = (int)layerSize.getX();
+		int lines = (int)layerSize.getY();
+
+		if (vetHeights == null || columns <= 0 || lines <= 0)
+		{
+			return 0;
+		}
+
+		return vetHeights[wrap(column, columns) + wrap(line, lines) * columns];
+	}
+
+	/***********************************************************
+	*Name: getHeightAt
+	*Description: height of the cell under a screen position
+	*Parameters: double, double
+	*Return: int
+	************************************************************/
+	public int getHeightAt(double screenX, double screenY)
+	{
+		JGVector2D cell = screenToCell(screenX, screenY);
+
+		return getHeightByCell((int)cell.getX(), (int)cell.getY());
+	}
+
+	/***********************************************************
+	*Name: isWallAt
+	*Description: tells if a screen position falls on a cell occupied by a
+	*             building. This is the test a car or a person uses to know
+	*             that it cannot go through.
+	*Parameters: double, double
+	*Return: boolean
+	************************************************************/
+	public boolean isWallAt(double screenX, double screenY)
+	{
+		return getHeightAt(screenX, screenY) > 0;
+	}
+
+	/***********************************************************
+	*Name: getCameraX
+	*Description: horizontal point the camera looks down at
+	*Parameters: none
+	*Return: double
+	************************************************************/
+	private double getCameraX()
+	{
+		return (cameraCenter != null) ? cameraCenter.getX()
+				                      : gameManager.windowManager.getResolutionWidth() / 2.0;
+	}
+
+	/***********************************************************
+	*Name: getCameraY
+	*Description: vertical point the camera looks down at
+	*Parameters: none
+	*Return: double
+	************************************************************/
+	private double getCameraY()
+	{
+		return (cameraCenter != null) ? cameraCenter.getY()
+				                      : gameManager.windowManager.getResolutionHeight() / 2.0;
+	}
+
+	/***********************************************************
+	*Name: render
+	*Description: draws the floor and then the buildings. The buildings are
+	*             visited from the ones far from the camera to the ones near
+	*             it, because a near building may hide a far one.
+	*Parameters: none
+	*Return: void
+	************************************************************/
+	public void render()
+	{
+		if (!isReadyToRender())
+		{
+			return;
+		}
+
+		double blockWidth = blockSize.getX();
+		double blockHeight = blockSize.getY();
+		int columns = (int)layerSize.getX();
+		int lines = (int)layerSize.getY();
+		int screenWidth = gameManager.windowManager.getResolutionWidth();
+		int screenHeight = gameManager.windowManager.getResolutionHeight();
+		Graphics2D graphics = gameManager.graphics;
+
+		//Celulas que tocam a tela
+		int firstColumn = (int)Math.floor((0 - offset.getX()) / blockWidth);
+		int lastColumn  = (int)Math.ceil((screenWidth - offset.getX()) / blockWidth);
+		int firstLine   = (int)Math.floor((0 - offset.getY()) / blockHeight);
+		int lastLine    = (int)Math.ceil((screenHeight - offset.getY()) / blockHeight);
+
+		//O CHAO
+		for (int line = firstLine; line <= lastLine; line++)
+		{
+			for (int column = firstColumn; column <= lastColumn; column++)
+			{
+				int blockIndex = wrap(column, columns) + wrap(line, lines) * columns;
+
+				if (vetBlocks[blockIndex] == null)
+				{
+					continue;
+				}
+
+				drawBlock(vetBlocks[blockIndex].getFrameIndex(),
+				          (int)(offset.getX() + column * blockWidth),
+				          (int)(offset.getY() + line * blockHeight), graphics);
+			}
+		}
+
+		if (vetHeights == null)
+		{
+			return;
+		}
+
+		//OS PREDIOS
+		//Uma construcao alta se projeta para fora, entao pode aparecer mesmo
+		//com a base fora da tela: a margem cresce com a altura possivel.
+		int margin = 1 + (int)Math.ceil(maxHeight() * perspective *
+		                 Math.max(screenWidth, screenHeight) / Math.min(blockWidth, blockHeight));
+
+		double cameraX = getCameraX();
+		double cameraY = getCameraY();
+
+		//Da celula mais distante da camera para a mais proxima
+		for (int distance = maxDistance(firstColumn - margin, lastColumn + margin,
+		                                firstLine - margin, lastLine + margin,
+		                                cameraX, cameraY, blockWidth, blockHeight); distance >= 0; distance--)
+		{
+			for (int line = firstLine - margin; line <= lastLine + margin; line++)
+			{
+				for (int column = firstColumn - margin; column <= lastColumn + margin; column++)
+				{
+					int height = getHeightByCell(column, line);
+
+					if (height <= 0 || cellDistance(column, line, cameraX, cameraY, blockWidth, blockHeight) != distance)
+					{
+						continue;
+					}
+
+					drawBuilding(column, line, height, cameraX, cameraY, graphics);
+				}
+			}
+		}
+	}
+
+	/***********************************************************
+	*Name: cellDistance
+	*Description: distance from a cell to the camera, in whole blocks. Used
+	*             only to order the drawing.
+	*Parameters: int, int, double, double, double, double
+	*Return: int
+	************************************************************/
+	private int cellDistance(int column, int line, double cameraX, double cameraY,
+	                         double blockWidth, double blockHeight)
+	{
+		double centerX = offset.getX() + (column + 0.5) * blockWidth;
+		double centerY = offset.getY() + (line + 0.5) * blockHeight;
+
+		return (int)(Math.hypot(centerX - cameraX, centerY - cameraY) / Math.min(blockWidth, blockHeight));
+	}
+
+	/***********************************************************
+	*Name: maxDistance
+	*Description: greatest distance, in blocks, inside the visited area
+	*Parameters: int, int, int, int, double, double, double, double
+	*Return: int
+	************************************************************/
+	private int maxDistance(int firstColumn, int lastColumn, int firstLine, int lastLine,
+	                        double cameraX, double cameraY, double blockWidth, double blockHeight)
+	{
+		int maior = 0;
+		maior = Math.max(maior, cellDistance(firstColumn, firstLine, cameraX, cameraY, blockWidth, blockHeight));
+		maior = Math.max(maior, cellDistance(lastColumn, firstLine, cameraX, cameraY, blockWidth, blockHeight));
+		maior = Math.max(maior, cellDistance(firstColumn, lastLine, cameraX, cameraY, blockWidth, blockHeight));
+		maior = Math.max(maior, cellDistance(lastColumn, lastLine, cameraX, cameraY, blockWidth, blockHeight));
+
+		return maior;
+	}
+
+	/***********************************************************
+	*Name: maxHeight
+	*Description: tallest stack of the map
+	*Parameters: none
+	*Return: int
+	************************************************************/
+	private int maxHeight()
+	{
+		int maior = 0;
+
+		for (int index = 0; index < vetHeights.length; index++)
+		{
+			maior = Math.max(maior, vetHeights[index]);
+		}
+
+		return maior;
+	}
+
+	/***********************************************************
+	*Name: drawBuilding
+	*Description: draws the walls that face the camera and then the roof
+	*Parameters: int, int, int, double, double, Graphics2D
+	*Return: void
+	************************************************************/
+	private void drawBuilding(int column, int line, int height,
+	                          double cameraX, double cameraY, Graphics2D graphics)
+	{
+		double blockWidth = blockSize.getX();
+		double blockHeight = blockSize.getY();
+		double x = offset.getX() + column * blockWidth;
+		double y = offset.getY() + line * blockHeight;
+
+		//Deslocamento de um andar: cresce com a distancia ate a camera
+		double stepX = ((x + blockWidth / 2.0) - cameraX) * perspective;
+		double stepY = ((y + blockHeight / 2.0) - cameraY) * perspective;
+
+		//As paredes visiveis sao as viradas para a camera
+		for (int floor = 0; floor < height; floor++)
+		{
+			double baseX = x + stepX * floor;
+			double baseY = y + stepY * floor;
+
+			if (stepX > 0)
+			{
+				drawFace(baseX, baseY, 0, blockHeight, stepX, stepY, graphics);
+			}
+			else if (stepX < 0)
+			{
+				drawFace(baseX + blockWidth, baseY, 0, blockHeight, stepX, stepY, graphics);
+			}
+
+			if (stepY > 0)
+			{
+				drawFace(baseX, baseY, blockWidth, 0, stepX, stepY, graphics);
+			}
+			else if (stepY < 0)
+			{
+				drawFace(baseX, baseY + blockHeight, blockWidth, 0, stepX, stepY, graphics);
+			}
+		}
+
+		//O telhado usa o tile que a celula tem no mapa
+		int roofIndex = getFrameIndexByCell(column, line);
+
+		if (roofIndex >= 0)
+		{
+			drawBlock(roofIndex, (int)(x + stepX * height), (int)(y + stepY * height), graphics);
+		}
+	}
+
+	/***********************************************************
+	*Name: drawFace
+	*Description: paints the wall tile over one face of a floor. The face is
+	*             a parallelogram, so an AffineTransform maps the tile onto it
+	*             without any deformation of the pixels being needed by hand.
+	*Parameters: double, double, double, double, double, double, Graphics2D
+	*Return: void
+	************************************************************/
+	private void drawFace(double originX, double originY, double edgeX, double edgeY,
+	                      double riseX, double riseY, Graphics2D graphics)
+	{
+		if (wallFrameIndex < 0 || vetTiles == null ||
+			wallFrameIndex >= vetTiles.length || vetTiles[wallFrameIndex] == null)
+		{
+			return;
+		}
+
+		BufferedImage wall = vetTiles[wallFrameIndex];
+
+		//(s,t) da textura vai para origem + s*aresta + t*subida
+		faceTransform.setTransform(edgeX / wall.getWidth(),  edgeY / wall.getWidth(),
+		                           riseX / wall.getHeight(), riseY / wall.getHeight(),
+		                           originX, originY);
+
+		graphics.drawImage(wall, faceTransform, null);
+	}
+
+	/*******************************************
+   	* Name: free
+   	* Description: free resources
+   	* Parameters: none
+   	* Returns: none
+   	******************************************/
+	public void free()
+	{
+		super.free();
+		vetHeights = null;
+		cameraCenter = null;
+		faceTransform = null;
+	}
+}
