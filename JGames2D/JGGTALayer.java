@@ -29,6 +29,13 @@ public class JGGTALayer extends JGLayer
 	private JGVector2D cameraCenter = null;
 	private AffineTransform faceTransform = null;
 
+	//Lista dos predios visiveis, reaproveitada a cada quadro para nao
+	//alocar nada dentro do laco de desenho
+	private int[] vetVisibleColumn = new int[256];
+	private int[] vetVisibleLine = new int[256];
+	private double[] vetVisibleKey = new double[256];
+	private int visibleCount = 0;
+
 	/***********************************************************
 	*Name: JGGTALayer
 	*Description: constructor
@@ -328,60 +335,131 @@ public class JGGTALayer extends JGLayer
 		double cameraX = getCameraX();
 		double cameraY = getCameraY();
 
-		//Da celula mais distante da camera para a mais proxima
-		for (int distance = maxDistance(firstColumn - margin, lastColumn + margin,
-		                                firstLine - margin, lastLine + margin,
-		                                cameraX, cameraY, blockWidth, blockHeight); distance >= 0; distance--)
+		collectBuildings(firstColumn - margin, lastColumn + margin,
+		                 firstLine - margin, lastLine + margin,
+		                 cameraX, cameraY, blockWidth, blockHeight);
+
+		//Do mais distante da camera para o mais proximo: um predio proximo
+		//pode cobrir um distante, nunca o contrario
+		sortByKey(0, visibleCount - 1);
+
+		for (int index = 0; index < visibleCount; index++)
 		{
-			for (int line = firstLine - margin; line <= lastLine + margin; line++)
+			drawBuilding(vetVisibleColumn[index], vetVisibleLine[index],
+			             getHeightByCell(vetVisibleColumn[index], vetVisibleLine[index]),
+			             cameraX, cameraY, graphics);
+		}
+	}
+
+	/***********************************************************
+	*Name: collectBuildings
+	*Description: gathers the cells with buildings inside the visited area,
+	*             keeping for each one the exact distance to the camera
+	*Parameters: int, int, int, int, double, double, double, double
+	*Return: void
+	************************************************************/
+	private void collectBuildings(int firstColumn, int lastColumn, int firstLine, int lastLine,
+	                              double cameraX, double cameraY, double blockWidth, double blockHeight)
+	{
+		visibleCount = 0;
+
+		for (int line = firstLine; line <= lastLine; line++)
+		{
+			for (int column = firstColumn; column <= lastColumn; column++)
 			{
-				for (int column = firstColumn - margin; column <= lastColumn + margin; column++)
+				if (getHeightByCell(column, line) <= 0)
 				{
-					int height = getHeightByCell(column, line);
-
-					if (height <= 0 || cellDistance(column, line, cameraX, cameraY, blockWidth, blockHeight) != distance)
-					{
-						continue;
-					}
-
-					drawBuilding(column, line, height, cameraX, cameraY, graphics);
+					continue;
 				}
+
+				if (visibleCount == vetVisibleColumn.length)
+				{
+					growVisibleArrays();
+				}
+
+				double centerX = offset.getX() + (column + 0.5) * blockWidth;
+				double centerY = offset.getY() + (line + 0.5) * blockHeight;
+				double deltaX = centerX - cameraX;
+				double deltaY = centerY - cameraY;
+
+				vetVisibleColumn[visibleCount] = column;
+				vetVisibleLine[visibleCount] = line;
+				//Distancia ao quadrado: ordena igual e evita a raiz quadrada.
+				//Guardar o valor exato, sem arredondar para blocos inteiros, e
+				//o que impede a ordem de saltar quando a camera anda.
+				vetVisibleKey[visibleCount] = deltaX * deltaX + deltaY * deltaY;
+				visibleCount++;
 			}
 		}
 	}
 
 	/***********************************************************
-	*Name: cellDistance
-	*Description: distance from a cell to the camera, in whole blocks. Used
-	*             only to order the drawing.
-	*Parameters: int, int, double, double, double, double
-	*Return: int
+	*Name: growVisibleArrays
+	*Description: doubles the room of the building list
+	*Parameters: none
+	*Return: void
 	************************************************************/
-	private int cellDistance(int column, int line, double cameraX, double cameraY,
-	                         double blockWidth, double blockHeight)
+	private void growVisibleArrays()
 	{
-		double centerX = offset.getX() + (column + 0.5) * blockWidth;
-		double centerY = offset.getY() + (line + 0.5) * blockHeight;
+		int novo = vetVisibleColumn.length * 2;
+		int[] colunas = new int[novo];
+		int[] linhas = new int[novo];
+		double[] chaves = new double[novo];
 
-		return (int)(Math.hypot(centerX - cameraX, centerY - cameraY) / Math.min(blockWidth, blockHeight));
+		System.arraycopy(vetVisibleColumn, 0, colunas, 0, visibleCount);
+		System.arraycopy(vetVisibleLine, 0, linhas, 0, visibleCount);
+		System.arraycopy(vetVisibleKey, 0, chaves, 0, visibleCount);
+
+		vetVisibleColumn = colunas;
+		vetVisibleLine = linhas;
+		vetVisibleKey = chaves;
 	}
 
 	/***********************************************************
-	*Name: maxDistance
-	*Description: greatest distance, in blocks, inside the visited area
-	*Parameters: int, int, int, int, double, double, double, double
-	*Return: int
+	*Name: sortByKey
+	*Description: orders the building list by distance, farthest first
+	*Parameters: int, int
+	*Return: void
 	************************************************************/
-	private int maxDistance(int firstColumn, int lastColumn, int firstLine, int lastLine,
-	                        double cameraX, double cameraY, double blockWidth, double blockHeight)
+	private void sortByKey(int first, int last)
 	{
-		int maior = 0;
-		maior = Math.max(maior, cellDistance(firstColumn, firstLine, cameraX, cameraY, blockWidth, blockHeight));
-		maior = Math.max(maior, cellDistance(lastColumn, firstLine, cameraX, cameraY, blockWidth, blockHeight));
-		maior = Math.max(maior, cellDistance(firstColumn, lastLine, cameraX, cameraY, blockWidth, blockHeight));
-		maior = Math.max(maior, cellDistance(lastColumn, lastLine, cameraX, cameraY, blockWidth, blockHeight));
+		if (first >= last)
+		{
+			return;
+		}
 
-		return maior;
+		double pivot = vetVisibleKey[(first + last) / 2];
+		int i = first;
+		int j = last;
+
+		while (i <= j)
+		{
+			while (vetVisibleKey[i] > pivot) i++;
+			while (vetVisibleKey[j] < pivot) j--;
+
+			if (i <= j)
+			{
+				swapVisible(i, j);
+				i++;
+				j--;
+			}
+		}
+
+		sortByKey(first, j);
+		sortByKey(i, last);
+	}
+
+	/***********************************************************
+	*Name: swapVisible
+	*Description: exchanges two entries of the building list
+	*Parameters: int, int
+	*Return: void
+	************************************************************/
+	private void swapVisible(int a, int b)
+	{
+		int coluna = vetVisibleColumn[a]; vetVisibleColumn[a] = vetVisibleColumn[b]; vetVisibleColumn[b] = coluna;
+		int linha = vetVisibleLine[a];    vetVisibleLine[a] = vetVisibleLine[b];     vetVisibleLine[b] = linha;
+		double chave = vetVisibleKey[a];  vetVisibleKey[a] = vetVisibleKey[b];       vetVisibleKey[b] = chave;
 	}
 
 	/***********************************************************
