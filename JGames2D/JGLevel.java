@@ -119,15 +119,11 @@ public abstract class JGLevel
 		layer.setTileImage(tileImage);
 		layer.setIndiceCores(colors);
 		layer.createLayer(layerImage);
-		
-		if (layer != null)
-		{
-			layer.setAutoRender(autoRender);
-			vetLayers.add(layer);
-			return layer;
-		}
-		
-		return null;
+
+		layer.setAutoRender(autoRender);
+		vetLayers.add(layer);
+
+		return layer;
 	}
 	
 	/***********************************************************
@@ -140,15 +136,11 @@ public abstract class JGLevel
 	{
 		JGLayer layer = new JGLayer(gameManager, layerSize, blockSize);
 		layer.setTileImage(tileImage);
-		
-		if (layer != null)
-		{
-			layer.setAutoRender(autoRender);
-			vetLayers.add(layer);
-			return layer;
-		}
-		
-		return null;
+
+		layer.setAutoRender(autoRender);
+		vetLayers.add(layer);
+
+		return layer;
 	}
 	
 	/***********************************************************
@@ -161,15 +153,11 @@ public abstract class JGLevel
 	{
 		JGSprite sprite = new JGSprite(gameManager, lines, colunms);
 		sprite.setSpriteImage(image);
-		
-		if (sprite != null)
-		{
-			sprite.autoRender = true;
-			vetSprites.add(sprite);
-			return sprite;
-		}
-		
-		return null;
+
+		sprite.autoRender = true;
+		vetSprites.add(sprite);
+
+		return sprite;
 	}
 	
 	/***********************************************************
@@ -194,11 +182,4 @@ public abstract class JGLevel
 		}
 		vetLayers.clear();
 	}
-	
-	public void finalize()
-	{
-		vetLayers = null;
-		vetSprites = null;
-		gameManager = null;
-	}	
 }

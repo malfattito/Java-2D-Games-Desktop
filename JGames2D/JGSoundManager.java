@@ -53,15 +53,11 @@ public class JGSoundManager
 			}
 		}
 		
-		//Creates a new image
+		//Creates a new sound effect
 		JGSoundEffect sound = new JGSoundEffect(pName);
-		if (sound != null)
-		{
-			vetSoundEffects.add(sound);
-			return sound;
-		}
-		
-		return null;
+		vetSoundEffects.add(sound);
+
+		return sound;
 	}
 	
 	/***********************************************************

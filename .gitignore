@@ -1,0 +1,4 @@
+LOG.txt
+*.class
+bin/
+out/

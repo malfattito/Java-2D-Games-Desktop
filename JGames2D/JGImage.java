@@ -153,8 +153,12 @@ public class JGImage
    	******************************************/
 	public void free()
 	{
-		image.flush();
-		image = null;
+		if (image != null)
+		{
+			image.flush();
+			image = null;
+		}
 		imageName = null;
+		referenceCount = 0;
 	}
 }

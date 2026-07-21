@@ -374,6 +374,12 @@ public class JGMusic
    	******************************************/
     public void free() 
     {
+    	//A thread do BasicPlayer continuaria tocando sem o stop
+    	if (player != null)
+    	{
+    		stop();
+    	}
+
     	player        = null;
    	 	url           = null;
    	 	delegate      = null;

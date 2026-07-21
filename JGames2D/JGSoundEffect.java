@@ -29,15 +29,33 @@ public class JGSoundEffect
 	************************************************************/
 	JGSoundEffect(URL file)
 	{
+		fileName = file.getPath();
+
+		AudioInputStream stream = null;
 		try
 		{
-			AudioInputStream stream = AudioSystem.getAudioInputStream(file);
+			stream = AudioSystem.getAudioInputStream(file);
 			clip = AudioSystem.getClip();
 			clip.open(stream);
-			fileName = file.getPath();
 		}
 		catch(Exception e)
 		{
+			//Sem som o jogo continua jogavel: registra e segue
+			clip = null;
+			JGLog.writeLog("ERROR LOAD SOUND " + file + " : " + e + "\n");
+		}
+		finally
+		{
+			if (stream != null)
+			{
+				try
+				{
+					stream.close();
+				}
+				catch(Exception e)
+				{
+				}
+			}
 		}
 	}
 	
@@ -60,14 +78,19 @@ public class JGSoundEffect
 	************************************************************/
 	public void setVolume(float volume)
 	{
-		volume = volume / 100.0f;
-		
-		FloatControl control = (FloatControl)clip.getControl(FloatControl.Type.MASTER_GAIN);
-		
-		if (control != null)
+		if (clip == null || !clip.isControlSupported(FloatControl.Type.MASTER_GAIN))
 		{
-			control.setValue((20f * (float) Math.log10(volume)));
+			return;
 		}
+
+		//Volume zero daria log10(0) = -infinito
+		volume = Math.max(0.0001f, Math.min(100.0f, volume)) / 100.0f;
+
+		FloatControl control = (FloatControl)clip.getControl(FloatControl.Type.MASTER_GAIN);
+		float gain = 20f * (float) Math.log10(volume);
+
+		//O ganho precisa caber no intervalo aceito pela placa de som
+		control.setValue(Math.max(control.getMinimum(), Math.min(control.getMaximum(), gain)));
 	}
 	
 	/***********************************************************
@@ -78,6 +101,12 @@ public class JGSoundEffect
 	************************************************************/
 	public void play()
 	{
+		if (clip == null)
+		{
+			return;
+		}
+
+		clip.stop();
 		clip.setFramePosition(0);
 		clip.start();
 	}
@@ -90,9 +119,14 @@ public class JGSoundEffect
 	************************************************************/
 	public void loop()
 	{
-		clip.loop(Clip.LOOP_CONTINUOUSLY);
+		if (clip == null)
+		{
+			return;
+		}
+
+		clip.stop();
 		clip.setFramePosition(0);
-		clip.start();
+		clip.loop(Clip.LOOP_CONTINUOUSLY);
 	}
 	
 	/***********************************************************
@@ -103,8 +137,14 @@ public class JGSoundEffect
 	************************************************************/
 	public void stop()
 	{
+		if (clip == null)
+		{
+			return;
+		}
+
+		//Nao fecha o clip: o som continua reutilizavel por play()
 		clip.stop();
-		clip.close();
+		clip.setFramePosition(0);
 	}
 	
 	/***********************************************************
@@ -115,7 +155,13 @@ public class JGSoundEffect
 	************************************************************/
 	public void free()
 	{
-		clip = null;
+		//O clip segura uma linha de audio do sistema: precisa ser fechado
+		if (clip != null)
+		{
+			clip.stop();
+			clip.close();
+			clip = null;
+		}
 		fileName = null;
 	}
 }

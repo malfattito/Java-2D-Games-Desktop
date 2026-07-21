@@ -10,7 +10,6 @@ package JGames2D;
 
 //Used packages
 import java.io.FileWriter;
-import javax.swing.JOptionPane;
 
 public class JGLog 
 {
@@ -42,7 +41,8 @@ public class JGLog
 		}
 		catch(Exception e)
 		{
-			JOptionPane.showMessageDialog(null,"OPEN LOG ERROR");
+			//Uma janela modal aqui congelaria o laco do jogo
+			System.err.println("OPEN LOG ERROR: " + e);
 		}
 	}
 	
@@ -63,7 +63,7 @@ public class JGLog
 		}
 		catch(Exception e)
 		{
-			JOptionPane.showMessageDialog(null,"LOG WRITE ERROR");
+			System.err.println("LOG WRITE ERROR: " + e);
 		}
 	}
 	

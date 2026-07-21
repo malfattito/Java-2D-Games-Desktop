@@ -79,12 +79,7 @@ public class JGAnimation
 	************************************************************/
 	public int getCurrentFrame()
 	{
-		if (currentFrame >= 0 && currentFrame < vetFrames.length)
-		{
-			return vetFrames[currentFrame];
-		}
-		
-		return vetFrames[vetFrames.length-1];
+		return getCurrentFrameIndex();
 	}
 	
 	/***********************************************************
@@ -111,8 +106,20 @@ public class JGAnimation
 	************************************************************/
 	public void restart()
 	{
-		timer.restart((fps > 0) ? 1000 / fps : 1);
+		timer.restart(getFrameInterval());
 		currentFrame = 0;
+	}
+
+	/***********************************************************
+	*Name: getFrameInterval
+	*Description: milliseconds each frame stays on screen. Never zero,
+	*             which would make the animation loop spin forever.
+	*Parameters: None
+	*Return: long
+	************************************************************/
+	private long getFrameInterval()
+	{
+		return (fps > 0) ? Math.max(1, 1000 / fps) : 1000;
 	}
 	
 	/***********************************************************
@@ -125,7 +132,7 @@ public class JGAnimation
 	{
 		
 		this.fps = fps;
-		timer.restart((fps > 0) ? 1000 / fps : 1);
+		timer.restart(getFrameInterval());
 	}
 	
 	/***********************************************************
@@ -137,8 +144,10 @@ public class JGAnimation
 	public void update()
 	{
 		timer.update();
-		
-		if (timer.isTimeEnded())
+
+		//Avanca quantos quadros couberem no tempo decorrido: com um laco
+		//simples uma animacao mais rapida que a taxa de quadros ficaria lenta
+		while (timer.isTimeEnded())
 		{
 			if(loop)
 			{
@@ -148,8 +157,16 @@ public class JGAnimation
 			else
 			{
 				currentFrame += (currentFrame < vetFrames.length)? 1: 0;
+
+				if (currentFrame >= vetFrames.length)
+				{
+					timer.restart();
+					return;
+				}
 			}
-			timer.restart();
+
+			//Desconta o intervalo em vez de zerar, preservando o tempo excedente
+			timer.consume();
 		}
 	}
 	

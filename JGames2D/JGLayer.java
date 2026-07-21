@@ -12,8 +12,8 @@ package JGames2D;
 //Used Packages
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
-import java.awt.image.ColorModel;
 import java.net.URL;
+import java.util.HashMap;
 
 public class JGLayer 
 {
@@ -28,6 +28,7 @@ public class JGLayer
 	private JGColorIndex[] vetColorIndex = null;
 	private boolean visible = false;
 	private boolean autoRender = false;
+	private int tileColumns = 0;
 	
 	/***********************************************************
 	*Name: JGLayer
@@ -118,26 +119,6 @@ public class JGLayer
 	}
 	
 	/***********************************************************
-	*Name: getBlockIndexByColor
-	*Description: returns the block index using your RGB color
-	*Parameters: none
-	*Return: JGVector2D
-	************************************************************/
-	private int getBlockIndexByColor(int R, int G, int B)
-	{
-		for (int iIndex=0; iIndex < vetColorIndex.length; iIndex++)
-		{
-			if (vetColorIndex[iIndex].getColor().getRed() == R   && 
-				vetColorIndex[iIndex].getColor().getGreen() == G && 
-				vetColorIndex[iIndex].getColor().getBlue() == B)
-			{
-				return vetColorIndex[iIndex].getFrameIndex();
-			}
-		}
-		return -1;
-	}
-	
-	/***********************************************************
 	*Name: setFrameIndex
 	*Description:sets the frame index by a specific position
 	*Parameters: int, int
@@ -212,6 +193,19 @@ public class JGLayer
 	public void setTileImage(URL file)
 	{
 		tileImage = JGImageManager.loadImage(file);
+
+		if (tileImage == null)
+		{
+			throw new IllegalArgumentException("JGLayer: nao foi possivel carregar a imagem de tiles " + file);
+		}
+
+		if (blockSize == null || blockSize.getX() <= 0 || blockSize.getY() <= 0)
+		{
+			throw new IllegalArgumentException("JGLayer: o tamanho do bloco deve ser maior que zero");
+		}
+
+		//O numero de colunas do tileset nao muda: calcula uma unica vez
+		tileColumns = (int)(tileImage.getImageWidth() / blockSize.getX());
 	}
 	
 	/***********************************************************
@@ -245,14 +239,12 @@ public class JGLayer
 	************************************************************/
 	private void drawBlock(int frameIndex, int x, int y, Graphics2D g2d)
 	{
-		int rowsCount = (int)(tileImage.getImage().getWidth() / blockSize.getX());
-		
 		int width = (int)blockSize.getX();
 		int height = (int)blockSize.getY();
-		
-		int fx = (int)((frameIndex % rowsCount) * width);
-		int fy = (int)((frameIndex / rowsCount) * height);
-		
+
+		int fx = (frameIndex % tileColumns) * width;
+		int fy = (frameIndex / tileColumns) * height;
+
 		g2d.drawImage(tileImage.getImage() ,x, y, x + width, y + height ,fx, fy, fx + width, fy + height, null);
 	}
 	
@@ -265,43 +257,60 @@ public class JGLayer
 	public void createLayer(URL fileName)
 	{
 		//Loads the pixel image
-		BufferedImage pixelImage = JGImageManager.loadImage(fileName).getImage();
-		
+		JGImage indexImage = JGImageManager.loadImage(fileName);
+
 		//Testa se a imagem foi carregada
-		if (pixelImage == null)
+		if (indexImage == null || indexImage.getImage() == null)
 		{
-			return;
+			throw new IllegalArgumentException("JGLayer: nao foi possivel carregar o mapa de cores " + fileName);
 		}
-		
-		//set the layer size
-		layerSize.setX(pixelImage.getWidth());
-		layerSize.setY(pixelImage.getHeight());
-		
-		//Cria o vetor de bricks
-		vetBlocks = new JGFrameIndex[(int)(layerSize.getX() * layerSize.getY())];
-		
-		//Obtem o modelo de cores da imagem
-		ColorModel colorModel = pixelImage.getColorModel();
-		
-		//Configura os bricks da layer conforme a cor da imagem
-		for (int iIndex = 0;  iIndex < pixelImage.getWidth(); iIndex++)
+
+		if (vetColorIndex == null)
 		{
-			for (int jIndex = 0; jIndex < pixelImage.getHeight(); jIndex++)
+			throw new IllegalStateException("JGLayer: chame setIndiceCores() antes de createLayer()");
+		}
+
+		BufferedImage pixelImage = indexImage.getImage();
+		int imageWidth = pixelImage.getWidth();
+		int imageHeight = pixelImage.getHeight();
+
+		//set the layer size
+		layerSize.setX(imageWidth);
+		layerSize.setY(imageHeight);
+
+		//Cria o vetor de bricks
+		vetBlocks = new JGFrameIndex[imageWidth * imageHeight];
+
+		//Indexa as cores por valor RGB: evita uma busca linear por pixel
+		HashMap<Integer, Integer> colorTable = new HashMap<Integer, Integer>();
+		for (int iIndex = 0; iIndex < vetColorIndex.length; iIndex++)
+		{
+			colorTable.put(vetColorIndex[iIndex].getColor().getRGB() & 0x00FFFFFF,
+					       vetColorIndex[iIndex].getFrameIndex());
+		}
+
+		//Configura os bricks da layer conforme a cor da imagem
+		for (int iIndex = 0;  iIndex < imageWidth; iIndex++)
+		{
+			for (int jIndex = 0; jIndex < imageHeight; jIndex++)
 			{
-				int index = getBlockIndexByColor(colorModel.getRed(pixelImage.getRGB(iIndex, jIndex)),
-						                         colorModel.getGreen(pixelImage.getRGB(iIndex, jIndex)), 
-						                         colorModel.getBlue(pixelImage.getRGB(iIndex, jIndex)));
-				if (index >= 0)
+				//Descarta o canal alfa: so o RGB identifica o bloco
+				Integer index = colorTable.get(pixelImage.getRGB(iIndex, jIndex) & 0x00FFFFFF);
+
+				if (index != null)
 				{
-					vetBlocks[iIndex + (jIndex*pixelImage.getWidth())] = new JGFrameIndex();
-					vetBlocks[iIndex + (jIndex*pixelImage.getWidth())].setFrameIndex(index);
+					vetBlocks[iIndex + (jIndex * imageWidth)] = new JGFrameIndex();
+					vetBlocks[iIndex + (jIndex * imageWidth)].setFrameIndex(index.intValue());
 				}
 				else
 				{
-					vetBlocks[iIndex + (jIndex*pixelImage.getWidth())] = null;
+					vetBlocks[iIndex + (jIndex * imageWidth)] = null;
 				}
 			}
 		}
+
+		//O mapa de cores so e necessario durante a construcao da layer
+		JGImageManager.free(indexImage);
 	}
 	
 	/***********************************************************
@@ -319,29 +328,30 @@ public class JGLayer
 		double offsetY = offset.getY();
 		double layerSizeX = layerSize.getX();
 		double layerSizeY = layerSize.getY();
-		
-		//Retorna se a layer não estiver visível
-		if (!visible)
+
+		//Retorna se a layer nao estiver visivel ou ainda nao tiver blocos
+		if (!visible || vetBlocks == null || tileImage == null)
 		{
 			return;
 		}
-		
-		if (blockSize.getX() ==0 || blockSize.getY() == 0)
+
+		//Sem tamanho de bloco valido o desenho dividiria por zero
+		if (blockSize.getX() <= 0 || blockSize.getY() <= 0 || layerSizeX <= 0 || layerSizeY <= 0)
 		{
-			System.out.println("Zerou");
+			return;
 		}
-		
-		//Calcula o início da layer em x caso offset seja menor que zero
+
+		//Calcula o inï¿½cio da layer em x caso offset seja menor que zero
 		if (offsetX > 0)
 		{	
 			int mult = (int)Math.ceil(Math.abs(offsetX) / blockSize.getX());
 			xBlock = ((int)layerSizeX - ((mult % (int)layerSizeX))) == (int)layerSizeX ? 0 : ((int)layerSizeX - ((mult % (int)layerSizeX))); 
 			offsetX -= mult * blockSize.getX();
 		}
-		//Guarda o início do offset e o brick inicial em X
+		//Guarda o inï¿½cio do offset e o brick inicial em X
 		xPosition = offsetX;
 		
-		//Calcula o início da layer em y caso offset seja menor que zero
+		//Calcula o inï¿½cio da layer em y caso offset seja menor que zero
 		if (offsetY > 0)
 		{
 			int mult = (int)Math.ceil(Math.abs(offsetY) / blockSize.getY());
@@ -349,19 +359,19 @@ public class JGLayer
 			offsetY -= mult * blockSize.getY();
 		}
 		
-		//Desenha todos os bricks da layer
-		for(int iStartX = xBlock; offsetY < gameManager.windowManager.getHeight(); 
-				                  yBlock = (yBlock+1)%(int)layerSizeY, 
+		//Desenha todos os bricks da layer.
+		//getResolutionWidth/Height sao a area de desenho: getWidth/getHeight
+		//da janela incluiriam as bordas e a barra de titulo.
+		int screenWidth = gameManager.windowManager.getResolutionWidth();
+		int screenHeight = gameManager.windowManager.getResolutionHeight();
+
+		for(int iStartX = xBlock; offsetY < screenHeight;
+				                  yBlock = (yBlock+1)%(int)layerSizeY,
 				                  offsetY += blockSize.getY(),
-				                  xBlock = iStartX,offsetX = (int)xPosition)
+				                  xBlock = iStartX,offsetX = xPosition)
 		{
-			for( ; offsetX < gameManager.windowManager.getWidth(); xBlock = (xBlock+1)%(int)layerSizeX, offsetX += blockSize.getX())
-			{	
-				if (vetBlocks == null)
-				{
-					return;
-				}
-				
+			for( ; offsetX < screenWidth; xBlock = (xBlock+1)%(int)layerSizeX, offsetX += blockSize.getX())
+			{
 				int blockIndex = xBlock + (yBlock * (int)layerSizeX);
 				if (vetBlocks[blockIndex] != null)
 				{
@@ -379,7 +389,7 @@ public class JGLayer
    	******************************************/
 	public void free()
 	{
-		//JGImageManager.free(tileImage);
+		JGImageManager.free(tileImage);
 		gameManager = null;
 		vetBlocks = null;
 		blockSize = null;
@@ -387,10 +397,15 @@ public class JGLayer
 		layerSize = null;
 		speed = null;
 		tileImage = null;
-		for (int index = 0; index < vetColorIndex.length; index++)
+
+		//A layer criada por tamanho nao possui indice de cores
+		if (vetColorIndex != null)
 		{
-			vetColorIndex[index].free();
+			for (int index = 0; index < vetColorIndex.length; index++)
+			{
+				vetColorIndex[index].free();
+			}
+			vetColorIndex = null;
 		}
-		vetColorIndex = null;
 	}
 }

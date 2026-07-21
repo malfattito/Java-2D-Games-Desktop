@@ -26,7 +26,8 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	private JGVector2D mousePosition = null;
 	private boolean mouseState = false;
 	private boolean mousePrevState = false;
-	
+	private JGWindowManager windowManager = null;
+
 	/*******************************************
    	* Name: JGInputManager
    	* Description: user event handler
@@ -36,13 +37,56 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	public JGInputManager(JFrame window)
 	{
 		mousePosition = new JGVector2D();
-		
+
 		keyStates = new boolean[KEYS_NUMBER];
 		prevKeyStates = new boolean[KEYS_NUMBER];
-		
+
+		if (window instanceof JGWindowManager)
+		{
+			windowManager = (JGWindowManager)window;
+		}
+
 		window.addKeyListener(this);
 		window.addMouseMotionListener(this);
 		window.addMouseListener(this);
+	}
+
+	/*******************************************
+   	* Name: isValidKey
+   	* Description: tells if the key code fits the state table
+   	* Parameters: int
+   	* Returns: boolean
+   	******************************************/
+	private boolean isValidKey(int keyCode)
+	{
+		return (keyCode >= 0 && keyCode < KEYS_NUMBER);
+	}
+
+	/*******************************************
+   	* Name: updateMousePosition
+   	* Description: converts window coordinates into drawing area coordinates
+   	* Parameters: MouseEvent
+   	* Returns: none
+   	******************************************/
+	private void updateMousePosition(MouseEvent e)
+	{
+		if (windowManager == null)
+		{
+			mousePosition.setXY(e.getX(), e.getY());
+			return;
+		}
+
+		//e.getX()/getY() estao em coordenadas da janela: descontar a origem da
+		//area de desenho (bordas ou tarjas) e desfazer a ampliacao da tela cheia
+		java.awt.Point origin = windowManager.getContentOrigin();
+		double scale = windowManager.getRenderScale();
+
+		if (scale <= 0)
+		{
+			scale = 1.0;
+		}
+
+		mousePosition.setXY((e.getX() - origin.x) / scale, (e.getY() - origin.y) / scale);
 	}
 	
 	/*******************************************
@@ -71,7 +115,12 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
    	******************************************/
 	public boolean keyReleased(int keyCode)
 	{
-		return (prevKeyStates[keyCode]) && !(keyStates[keyCode]) ? true : false;
+		if (!isValidKey(keyCode))
+		{
+			return false;
+		}
+
+		return prevKeyStates[keyCode] && !keyStates[keyCode];
 	}
 	
 	/***********************************************************
@@ -93,11 +142,16 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
    	******************************************/
 	public boolean keyTyped(int keyCode)
 	{
+		if (!isValidKey(keyCode))
+		{
+			return false;
+		}
+
 		boolean result = prevKeyStates[keyCode] && !keyStates[keyCode];
 
 		prevKeyStates[keyCode] = false;
-		
-		return result; 
+
+		return result;
 	}
 	
 	/***********************************************************
@@ -123,7 +177,7 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
    	******************************************/
 	public boolean keyPressed(int keyCode)
 	{
-		return keyStates[keyCode];
+		return isValidKey(keyCode) && keyStates[keyCode];
 	}
 
 	/***********************************************************
@@ -155,7 +209,7 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	************************************************************/ 
 	public void keyPressed(KeyEvent e)
 	{
-		if(e.getKeyCode() < KEYS_NUMBER)
+		if(isValidKey(e.getKeyCode()))
 		{
 			keyStates[e.getKeyCode()] = true;
 		}
@@ -169,7 +223,7 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	************************************************************/
 	public void keyReleased(KeyEvent e)
 	{
-		if(e.getKeyCode() < KEYS_NUMBER)
+		if(isValidKey(e.getKeyCode()))
 		{
 			prevKeyStates[e.getKeyCode()] = keyStates[e.getKeyCode()];
 			keyStates[e.getKeyCode()] = false;
@@ -195,10 +249,7 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	************************************************************/
 	public void mouseMoved(MouseEvent e)
 	{
-		mousePrevState = false;
-		
-		mousePosition.setX(e.getX());
-		mousePosition.setY(e.getY());
+		updateMousePosition(e);
 	}
 	
 	/***********************************************************
@@ -209,9 +260,7 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	************************************************************/
 	public void mouseDragged(MouseEvent e)
 	{
-		mousePrevState = false;
-		mousePosition.setX(e.getX());
-		mousePosition.setY(e.getY());
+		updateMousePosition(e);
 	}
 	
 	/***********************************************************

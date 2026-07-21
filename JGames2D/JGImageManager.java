@@ -46,15 +46,23 @@ public class JGImageManager
 	************************************************************/
 	public static JGImage loadImage(URL pName)
 	{
+		if (pName == null)
+		{
+			JGLog.writeLog("ERROR LOAD IMAGE: URL nula\n");
+			return null;
+		}
+
 		//try to recycle a image
 		for (JGImage image : vetImages)
 		{
 			if (pName.getPath().equals(image.getImageName()))
 			{
+				//Mais um dono para a mesma imagem
+				image.incReferenceCount();
 				return image;
 			}
 		}
-		
+
 		//Creates a new image
 		JGImage image = new JGImage();
 		if (image.load(pName))
@@ -62,19 +70,31 @@ public class JGImageManager
 			vetImages.add(image);
 			return image;
 		}
-		
+
 		return null;
 	}
-	
+
 	/*******************************************
-   	* Name: freeImage
-   	* Description: free a image from manager
+   	* Name: free
+   	* Description: releases one reference of the image. The pixels are only
+   	*              discarded when the last owner gives it up.
    	* Parameters: JGImage
    	* Returns: none
    	******************************************/
-    public static void free(JGImage image) 
+    public static void free(JGImage image)
     {
-    	vetImages.remove(image);
+    	if (image == null || vetImages == null)
+    	{
+    		return;
+    	}
+
+    	image.decReferenceCount();
+
+    	if (image.getReferenceCount() <= 0)
+    	{
+    		vetImages.remove(image);
+    		image.free();
+    	}
     }
 	
 	/*******************************************

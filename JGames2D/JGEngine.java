@@ -14,7 +14,7 @@ import java.util.ArrayList;
 public class JGEngine implements Runnable
 {
 	//Constants of the class
-	private final int SLEEP_TIPME = 33;
+	private final int FRAME_TIME = 33;
 	
 	//Class attributes
 	public JGWindowManager windowManager = null;
@@ -76,14 +76,28 @@ public class JGEngine implements Runnable
 	************************************************************/
 	public void run()
 	{
-		while (executing)
+		try
 		{
-			update();
-			swapBuffers();
-			pause();
+			while (executing)
+			{
+				long frameStart = System.nanoTime();
+
+				update();
+				swapBuffers();
+				pause(frameStart);
+			}
 		}
-		free();
-		System.exit(0);
+		catch(RuntimeException e)
+		{
+			//Sem isto um erro na cena mataria a thread do jogo deixando a
+			//janela aberta e o processo vivo para sempre
+			JGLog.writeLog("ERRO NAO TRATADO NO LOOP DO JOGO: " + e + "\n");
+			e.printStackTrace();
+		}
+		finally
+		{
+			free();
+		}
 	}
 	
 	/***********************************************************
@@ -95,18 +109,27 @@ public class JGEngine implements Runnable
 	private void update()
 	{
 		JGTimeManager.update();
-		
-		if (currentLevel != null)
+
+		JGLevel level = currentLevel;
+
+		if (level == null)
 		{
-			if (currentLevel.vetLayers.size() == 0)
-			{
-				graphics.fillRect(0, 0, windowManager.getWidth(), windowManager.getHeight());
-			}
-			
-			currentLevel.render();
-			currentLevel.update();
-			currentLevel.execute();
+			return;
 		}
+
+		level.execute();
+
+		//A logica da cena pode ter trocado o nivel corrente. Nesse caso o nivel
+		//antigo ja foi liberado: o novo so sera desenhado no proximo quadro.
+		if (level != currentLevel)
+		{
+			return;
+		}
+
+		level.update();
+
+		windowManager.clearBackBuffer();
+		level.render();
 	}
 	
 	/***********************************************************
@@ -115,16 +138,25 @@ public class JGEngine implements Runnable
 	*Parameters: none
 	*Return: none
 	************************************************************/
-	private void pause()
+	private void pause(long frameStart)
 	{
+		//Desconta o tempo ja gasto no quadro para manter a taxa constante
+		long elapsed = (System.nanoTime() - frameStart) / 1000000L;
+		long remaining = FRAME_TIME - elapsed;
+
+		if (remaining <= 0)
+		{
+			return;
+		}
+
 		try
 		{
-			Thread.sleep(SLEEP_TIPME);
+			Thread.sleep(remaining);
 		}
-		catch(Exception e)
+		catch(InterruptedException e)
 		{
-			System.out.println(e);
-			System.exit(1);
+			Thread.currentThread().interrupt();
+			executing = false;
 		}
 	}
 	

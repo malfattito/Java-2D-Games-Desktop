@@ -16,7 +16,9 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
+import java.awt.Insets;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -25,6 +27,8 @@ import javax.swing.JFrame;
 
 public class JGWindowManager extends JFrame
 {
+	private static final long serialVersionUID = 1L;
+
 	//Class Attributes
 	private int xPos, yPos;
 	private int colorsByPixell;
@@ -69,14 +73,55 @@ public class JGWindowManager extends JFrame
 	}
 	
 	/***********************************************************
-	*Name: setBacrkgoundCcolor
-	*Description: sets the backround color of window
-	*Parameters:None
+	*Name: setBackgroundColor
+	*Description: sets the background color used to clear the screen
+	*Parameters:Color
 	*Return: none
 	************************************************************/
 	public void setBackgroundColor(Color color)
 	{
+		backgroundColor = color;
 		gameManager.graphics.setColor(color);
+	}
+
+	/***********************************************************
+	*Name: clearBackBuffer
+	*Description: fills the whole back buffer with the background color
+	*Parameters: none
+	*Return: none
+	************************************************************/
+	public void clearBackBuffer()
+	{
+		Color previousColor = gameManager.graphics.getColor();
+		gameManager.graphics.setColor(backgroundColor);
+		gameManager.graphics.fillRect(0, 0, width, height);
+		gameManager.graphics.setColor(previousColor);
+	}
+
+	/***********************************************************
+	*Name: getResolutionWidth
+	*Description: returns the width of the drawing area, in pixels.
+	*             Not to be confused with the inherited getWidth(),
+	*             which returns the outer size of the window.
+	*Parameters: none
+	*Return: int
+	************************************************************/
+	public int getResolutionWidth()
+	{
+		return width;
+	}
+
+	/***********************************************************
+	*Name: getResolutionHeight
+	*Description: returns the height of the drawing area, in pixels.
+	*             Not to be confused with the inherited getHeight(),
+	*             which returns the outer size of the window.
+	*Parameters: none
+	*Return: int
+	************************************************************/
+	public int getResolutionHeight()
+	{
+		return height;
 	}
 	
 	/***********************************************************
@@ -157,6 +202,28 @@ public class JGWindowManager extends JFrame
 		this.width = width;
 		this.height = height;
 		colorsByPixell = depth;
+		createBackBuffer();
+	}
+
+	/***********************************************************
+	*Name: createBackBuffer
+	*Description: (re)creates the back buffer and its graphics context,
+	*             releasing the previous one
+	*Parameters: none
+	*Return: none
+	************************************************************/
+	private void createBackBuffer()
+	{
+		if (gameManager.graphics != null)
+		{
+			gameManager.graphics.dispose();
+		}
+
+		if (backBuffer != null)
+		{
+			backBuffer.flush();
+		}
+
 		backBuffer = new BufferedImage(width,height,BufferedImage.TYPE_INT_RGB);
 		gameManager.graphics = backBuffer.createGraphics();
 	}
@@ -172,18 +239,18 @@ public class JGWindowManager extends JFrame
 		
 		if (backBuffer == null)
 		{
-			backBuffer = new BufferedImage(width,height,BufferedImage.TYPE_INT_RGB);
-			gameManager.graphics = backBuffer.createGraphics();
+			createBackBuffer();
 		}
-		
+
 		//Esconde o ponteiro do mouse
-		cursor = Toolkit.getDefaultToolkit().createCustomCursor(Toolkit.getDefaultToolkit().getImage(""), new Point(0,0),"invisible");
+		BufferedImage blank = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+		cursor = Toolkit.getDefaultToolkit().createCustomCursor(blank, new Point(0,0),"invisible");
 		this.setCursor(cursor);
-		
-		//Solicita o foco para a janela
-		requestFocus();
-		
-		/*Trata o botão fechar no caso de modo janela*/
+
+		//A janela precisa ser focavel para receber os eventos de teclado
+		setFocusable(true);
+
+		/*Trata o botï¿½o fechar no caso de modo janela*/
 		addWindowListener(new WindowAdapter() 
 		{
 			public void windowClosing(WindowEvent e)
@@ -202,22 +269,42 @@ public class JGWindowManager extends JFrame
 	************************************************************/
 	public void showWindow()
 	{
-		//Verifica o modo de vídeo
+		//Verifica o modo de video
 		if (fullScreen)
 		{
-			//Modo tela cheia
-			//Configura o estilo da janela
-			setUndecorated(true);
-			setResizable(false);
-			setLocation(0,0);
-			
-			//Configura o modo FullScreen
-			DisplayMode displayMode = new DisplayMode(width,height,colorsByPixell,DisplayMode.REFRESH_RATE_UNKNOWN);
+			//O modo exclusivo (setFullScreenWindow) foi abandonado: em macOS
+			//recente ele esconde a barra de menu e o dock, porem a janela fica
+			//apenas preta, tanto pintando por paint() quanto por BufferStrategy.
+			//O back buffer continua na resolucao pedida e e ampliado no paint().
 			GraphicsEnvironment environment = GraphicsEnvironment.getLocalGraphicsEnvironment();
 			graphDevice = environment.getDefaultScreenDevice();
-			setLocation(graphDevice.getDisplayMode().getWidth() / 2, graphDevice.getDisplayMode().getHeight() / 2);
-			graphDevice.setFullScreenWindow(this);
-			graphDevice.setDisplayMode(displayMode);
+
+			colorsByPixell = graphDevice.getDisplayMode().getBitDepth();
+
+			if (isNativeFullScreenAvailable())
+			{
+				//macOS: tela cheia nativa, a mesma do botao verde. Esconde o
+				//dock e a barra de menu. Exige janela decorada e redimensionavel.
+				setTitle(windowTitle);
+				setSize(width, height);
+				setLocation(xPos, yPos);
+				setVisible(true);
+				requestNativeFullScreen();
+			}
+			else
+			{
+				//Demais sistemas: janela sem bordas ocupando a area util do
+				//monitor. Ocupar o monitor inteiro deixaria a barra de tarefas
+				//por cima do conteudo desenhado junto as bordas.
+				Rectangle screenArea = environment.getMaximumWindowBounds();
+
+				setUndecorated(true);
+				setResizable(false);
+				setSize(screenArea.width, screenArea.height);
+				setLocation(screenArea.x, screenArea.y);
+				setAlwaysOnTop(true);
+				setVisible(true);
+			}
 		}
 		else
 		{
@@ -227,12 +314,108 @@ public class JGWindowManager extends JFrame
 			setSize(width,height);
 			setVisible(true);
 			setResizable(false);
+
+			//As bordas e a barra de titulo so existem depois que a janela e exibida.
+			//Cresce a janela para que a area util tenha exatamente a resolucao pedida.
+			Insets insets = getInsets();
+			setSize(width + insets.left + insets.right, height + insets.top + insets.bottom);
 		}
+
+		//O foco so pode ser solicitado depois que a janela esta visivel
+		requestFocusInWindow();
+	}
+
+	/***********************************************************
+	*Name: isNativeFullScreenAvailable
+	*Description: tells if the macOS native fullscreen API can be used
+	*Parameters: none
+	*Return: boolean
+	************************************************************/
+	private boolean isNativeFullScreenAvailable()
+	{
+		try
+		{
+			Class.forName("com.apple.eawt.FullScreenUtilities");
+			Class.forName("com.apple.eawt.Application");
+			return true;
+		}
+		catch(Throwable t)
+		{
+			return false;
+		}
+	}
+
+	/***********************************************************
+	*Name: requestNativeFullScreen
+	*Description: asks macOS to put this window in fullscreen. Called by
+	*             reflection so the engine still compiles and runs elsewhere.
+	*Parameters: none
+	*Return: boolean
+	************************************************************/
+	private boolean requestNativeFullScreen()
+	{
+		try
+		{
+			Class<?> utils = Class.forName("com.apple.eawt.FullScreenUtilities");
+			utils.getMethod("setWindowCanFullScreen", java.awt.Window.class, boolean.class)
+			     .invoke(null, this, Boolean.TRUE);
+
+			Class<?> application = Class.forName("com.apple.eawt.Application");
+			Object instance = application.getMethod("getApplication").invoke(null);
+			application.getMethod("requestToggleFullScreen", java.awt.Window.class)
+			           .invoke(instance, this);
+
+			return true;
+		}
+		catch(Throwable t)
+		{
+			JGLog.writeLog("TELA CHEIA NATIVA INDISPONIVEL: " + t + "\n");
+			return false;
+		}
+	}
+
+	/***********************************************************
+	*Name: getRenderScale
+	*Description: factor applied to the back buffer when it is blitted.
+	*             Always 1 in windowed mode; in fullscreen it is the largest
+	*             factor that still fits the screen without distortion.
+	*Parameters: none
+	*Return: double
+	************************************************************/
+	double getRenderScale()
+	{
+		if (!fullScreen || width <= 0 || height <= 0)
+		{
+			return 1.0;
+		}
+
+		return Math.min((double)getWidth() / width, (double)getHeight() / height);
+	}
+
+	/***********************************************************
+	*Name: getContentOrigin
+	*Description: returns the top left corner of the drawing area, in window
+	*             coordinates. In fullscreen it centers the scaled image,
+	*             leaving black bars when the aspect ratios differ.
+	*Parameters: none
+	*Return: Point
+	************************************************************/
+	Point getContentOrigin()
+	{
+		if (fullScreen)
+		{
+			double scale = getRenderScale();
+			return new Point((int)((getWidth() - width * scale) / 2),
+					         (int)((getHeight() - height * scale) / 2));
+		}
+
+		Insets insets = getInsets();
+		return new Point(insets.left, insets.top);
 	}
 	
 	/***********************************************************
 	*Name: paint()
-	*Description: método da classe JFrame que repinta a janela
+	*Description: mï¿½todo da classe JFrame que repinta a janela
 	*Parametros: Graphics2D
 	*
 	*
@@ -240,8 +423,42 @@ public class JGWindowManager extends JFrame
 	************************************************************/
 	public void paint(Graphics graphics)
 	{
+		//A thread do jogo pode liberar o buffer enquanto a EDT repinta
+		BufferedImage buffer = backBuffer;
+
+		if (buffer == null)
+		{
+			return;
+		}
+
+		Point origin = getContentOrigin();
 		Graphics2D g2d = (Graphics2D)graphics;
-		g2d.drawImage(backBuffer,0,0,null);
+
+		if (!fullScreen)
+		{
+			g2d.drawImage(buffer,origin.x,origin.y,null);
+			return;
+		}
+
+		double scale = getRenderScale();
+		int destWidth = (int)(width * scale);
+		int destHeight = (int)(height * scale);
+
+		//Tarjas pretas quando a proporcao da tela difere da do jogo
+		g2d.setColor(Color.black);
+		if (origin.y > 0)
+		{
+			g2d.fillRect(0, 0, getWidth(), origin.y);
+			g2d.fillRect(0, origin.y + destHeight, getWidth(), getHeight() - origin.y - destHeight);
+		}
+		if (origin.x > 0)
+		{
+			g2d.fillRect(0, 0, origin.x, getHeight());
+			g2d.fillRect(origin.x + destWidth, 0, getWidth() - origin.x - destWidth, getHeight());
+		}
+
+		g2d.drawImage(buffer, origin.x, origin.y, origin.x + destWidth, origin.y + destHeight,
+				              0, 0, width, height, null);
 	}
 	
 	/*******************************************
@@ -252,16 +469,30 @@ public class JGWindowManager extends JFrame
    	******************************************/
 	public void free()
 	{
-		if (fullScreen)
+		//A tela cheia nao usa mais o modo exclusivo, entao nao ha modo de
+		//video a restaurar: basta esconder a janela
+		graphDevice = null;
+
+		setAlwaysOnTop(false);
+		setVisible(false);
+
+		if (gameManager != null && gameManager.graphics != null)
 		{
-			graphDevice.setFullScreenWindow(null);
-			graphDevice = null;
+			gameManager.graphics.dispose();
+			gameManager.graphics = null;
 		}
-		windowTitle = null;
-		backBuffer.flush();
+
+		BufferedImage buffer = backBuffer;
 		backBuffer = null;
+		if (buffer != null)
+		{
+			buffer.flush();
+		}
+
+		windowTitle = null;
 		cursor = null;
 		gameManager = null;
 		backgroundColor = null;
+		dispose();
 	}
 }

@@ -81,8 +81,8 @@ public class JGSprite
 	************************************************************/
 	public Rectangle getRectangle()
 	{
-		return new Rectangle((int)(position.getX() - (frameWidth / 2) * zoom.getX()), 
-				             (int)(position.getY() - (frameHeight / 2)*zoom.getY()),
+		return new Rectangle((int)(position.getX() - (frameWidth / 2.0) * zoom.getX()),
+				             (int)(position.getY() - (frameHeight / 2.0) * zoom.getY()),
 				             (int)(frameWidth * zoom.getX()), (int)(frameHeight * zoom.getY()));
 	}
 	
@@ -105,15 +105,18 @@ public class JGSprite
 	************************************************************/
 	public void moveTo(int timer, JGVector2D newPosition)
 	{
-		initMove.setX(position.getX());
-		initMove.setY(position.getY());
-		
-		endMove = newPosition;
-		
-		if (timer<=0 || (initMove == endMove))
+		initMove.setXY(position.getX(), position.getY());
+
+		//Copia os valores: guardar a referencia faria o sprite compartilhar
+		//o vetor de quem chamou o metodo
+		endMove.setXY(newPosition.getX(), newPosition.getY());
+
+		boolean samePosition = (initMove.getX() == endMove.getX()) &&
+				               (initMove.getY() == endMove.getY());
+
+		if (timer <= 0 || samePosition)
 		{
-			position.setX(endMove.getX());
-			position.setY(endMove.getY());
+			position.setXY(endMove.getX(), endMove.getY());
 			moveTimer.restart(0);
 		}
 		else
@@ -132,21 +135,23 @@ public class JGSprite
 	{
 		moveTimer.update();
 
-		if (moveTimer.getEndTime() !=0)
+		if (moveTimer.getEndTime() == 0)
 		{
-			if (!moveTimer.isTimeEnded())
-			{
-				position.setX(initMove.getX());
-				position.setX(position.getX() + ((initMove.getX() < endMove.getX()) ? -((initMove.getX() - endMove.getX()) * moveTimer.getCurrentTime())/moveTimer.getEndTime() : -(Math.abs(initMove.getX() - endMove.getX()) * moveTimer.getCurrentTime())/moveTimer.getEndTime()));
-				position.setY(initMove.getY());
-				position.setY(position.getY() + ((initMove.getY() < endMove.getY()) ? -((initMove.getY() - endMove.getY()) * moveTimer.getCurrentTime())/moveTimer.getEndTime(): -(Math.abs(initMove.getY() - endMove.getY()) * moveTimer.getCurrentTime())/moveTimer.getEndTime()));
-			}
-			else
-			{
-				position = endMove;
-				moveTimer.restart(0);
-			}
+			return;
 		}
+
+		if (moveTimer.isTimeEnded())
+		{
+			position.setXY(endMove.getX(), endMove.getY());
+			moveTimer.restart(0);
+			return;
+		}
+
+		//Interpolacao linear entre a posicao inicial e a final
+		double progress = (double)moveTimer.getCurrentTime() / (double)moveTimer.getEndTime();
+
+		position.setXY(initMove.getX() + (endMove.getX() - initMove.getX()) * progress,
+				       initMove.getY() + (endMove.getY() - initMove.getY()) * progress);
 	}
 	
 	/***********************************************************
@@ -158,18 +163,29 @@ public class JGSprite
 	public void setSpriteImage(URL imageName)
 	{
 		spriteImage = JGImageManager.loadImage(imageName);
-		
+
+		if (spriteImage == null)
+		{
+			throw new IllegalArgumentException("JGSprite: nao foi possivel carregar a imagem " + imageName);
+		}
+
+		if (countLines <= 0 || countColunms <= 0)
+		{
+			throw new IllegalArgumentException("JGSprite: numero de linhas e colunas deve ser maior que zero");
+		}
+
 		imageWidth = spriteImage.getImageWidth();
 		imageHeight = spriteImage.getImageHeight();
 		frameWidth = imageWidth / countColunms;
 		frameHeight = imageHeight / countLines;
-		
+
 		vetQuads = new BufferedImage[countLines * countColunms];
 		for (int iIndex=0; iIndex < vetQuads.length; iIndex++)
 		{
 			vetQuads[iIndex] =  new BufferedImage(frameWidth,frameHeight,BufferedImage.TYPE_4BYTE_ABGR);
 			Graphics2D graphics = vetQuads[iIndex].createGraphics();
 			drawFrame(iIndex, 0, 0, graphics);
+			graphics.dispose();
 		}
 	}
 	
@@ -212,7 +228,9 @@ public class JGSprite
 	************************************************************/
 	public int getCurrentAnimationFrame()
 	{
-		return vetAnim.get(currentAnimation).getCurrentFrameIndex();
+		JGAnimation animation = getCurrentAnimation();
+
+		return (animation != null) ? animation.getCurrentFrameIndex() : -1;
 	}
 	
 	/***********************************************************
@@ -234,6 +252,11 @@ public class JGSprite
 	************************************************************/
 	public JGAnimation getCurrentAnimation()
 	{
+		if (currentAnimation < 0 || currentAnimation >= vetAnim.size())
+		{
+			return null;
+		}
+
 		return vetAnim.get(currentAnimation);
 	}
 	
@@ -340,27 +363,9 @@ public class JGSprite
 	************************************************************/
 	public void render()
 	{
-		if (!visible)
-		{
-			return;
-		}
-		
-		transform.setToIdentity();
-		transform.translate(position.getX(), position.getY());
-		transform.rotate(fAngle);
-		transform.scale(zoom.getX(), zoom.getY());
-		transform.translate(-frameWidth / 2, -frameHeight/2);
-			
-		if (vetAnim.size() == 0)
-		{
-			gameManager.graphics.drawImage(vetQuads[0], transform, null);
-		}
-		else
-		{
-			gameManager.graphics.drawImage(vetQuads[vetAnim.get(currentAnimation).getCurrentFrameIndex()],transform, null);
-		}
+		render(position);
 	}
-	
+
 	/***********************************************************
 	*Name:render
 	*Description: render the sprite into the window using a especific position
@@ -369,25 +374,38 @@ public class JGSprite
 	************************************************************/
 	public void render(JGVector2D position)
 	{
-		if (!visible)
+		if (!visible || vetQuads == null)
 		{
 			return;
 		}
-		
+
 		transform.setToIdentity();
 		transform.translate(position.getX(), position.getY());
 		transform.rotate(fAngle);
-		transform.scale(zoom.getX(), zoom.getY());
-		transform.translate(-frameWidth / 2, -frameHeight/2);
-			
-		if (vetAnim.size() == 0)
+		//O espelhamento e aplicado aqui, e nao no recorte dos quadros,
+		//para que setMirror() funcione a qualquer momento
+		transform.scale(mirror ? -zoom.getX() : zoom.getX(), zoom.getY());
+		transform.translate(-frameWidth / 2.0, -frameHeight / 2.0);
+
+		gameManager.graphics.drawImage(vetQuads[getRenderFrameIndex()], transform, null);
+	}
+
+	/***********************************************************
+	*Name:getRenderFrameIndex
+	*Description: returns the frame index that must be drawn
+	*Parameters: none
+	*Return: int
+	************************************************************/
+	private int getRenderFrameIndex()
+	{
+		if (vetAnim.size() == 0 || currentAnimation < 0)
 		{
-			gameManager.graphics.drawImage(vetQuads[0], transform, null);
+			return 0;
 		}
-		else
-		{
-			gameManager.graphics.drawImage(vetQuads[vetAnim.get(currentAnimation).getCurrentFrameIndex()],transform, null);
-		}
+
+		int frameIndex = vetAnim.get(currentAnimation).getCurrentFrameIndex();
+
+		return (frameIndex >= 0 && frameIndex < vetQuads.length) ? frameIndex : 0;
 	}
 	
 	/***********************************************************
@@ -400,18 +418,11 @@ public class JGSprite
 	{
 		int sizeX = frameWidth;
 		int sizeY = frameHeight;
-		
-		int fx = (int)((frameIndex % countColunms) * sizeX);
-		int fy = (int)((frameIndex / countColunms) * sizeY);
-		
-		if (!mirror)
-		{
-			graphics.drawImage(spriteImage.getImage() ,x, y, (x + sizeX), (y + sizeY) ,fx, fy, (fx + sizeX), (fy + sizeY), null);
-		}
-		else
-		{
-			graphics.drawImage(spriteImage.getImage() ,(x + sizeX), y, x, (y + sizeY) ,fx, fy, (fx + sizeX), (fy + sizeY), null);
-		}
+
+		int fx = (frameIndex % countColunms) * sizeX;
+		int fy = (frameIndex / countColunms) * sizeY;
+
+		graphics.drawImage(spriteImage.getImage() ,x, y, (x + sizeX), (y + sizeY) ,fx, fy, (fx + sizeX), (fy + sizeY), null);
 	}
 	
 	/***********************************************************
@@ -442,25 +453,33 @@ public class JGSprite
 		endMove = null;
 		gameManager = null;
 		transform = null;
-		
-		//JGImageManager.free(spriteImage);
+
+		JGImageManager.free(spriteImage);
 		spriteImage = null;
-		
-		for (JGAnimation anim : vetAnim)
+
+		if (vetAnim != null)
 		{
-			anim.free();
+			for (JGAnimation anim : vetAnim)
+			{
+				anim.free();
+			}
+			vetAnim.clear();
+			vetAnim = null;
 		}
-		vetAnim.clear();
-		vetAnim = null;
-		
-		for(int index = 0; index < vetQuads.length; index++)
+
+		if (vetQuads != null)
 		{
-			vetQuads[index].flush();
-			vetQuads[index] = null;
+			for(int index = 0; index < vetQuads.length; index++)
+			{
+				if (vetQuads[index] != null)
+				{
+					vetQuads[index].flush();
+					vetQuads[index] = null;
+				}
+			}
+			vetQuads = null;
 		}
-		vetQuads = null;
-		
-		moveTimer.free();
+
 		moveTimer = null;
 	}
 }

@@ -73,6 +73,29 @@ public class JGTimer
 	{
 		iCurrentTime = 0;
 	}
+
+	/*******************************************
+	* Name: consume()
+	* Description: discounts one interval from the elapsed time, keeping the
+	*              remainder. Use instead of restart() to avoid drift.
+	* Parameters: none
+	* Returns: none
+	******************************************/
+	public void consume()
+	{
+		if (iEndTime <= 0)
+		{
+			iCurrentTime = 0;
+			return;
+		}
+
+		iCurrentTime -= iEndTime;
+
+		if (iCurrentTime < 0)
+		{
+			iCurrentTime = 0;
+		}
+	}
 	
 	/*******************************************
 	* Name: restart()
