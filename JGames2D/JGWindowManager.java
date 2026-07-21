@@ -30,6 +30,9 @@ public class JGWindowManager extends JFrame
 {
 	private static final long serialVersionUID = 1L;
 
+	//Depois disto a janela e dada como pronta mesmo sem aviso do sistema
+	private static final long READY_TIMEOUT = 3000;
+
 	//Class Attributes
 	private int xPos, yPos;
 	private int colorDepth;
@@ -43,6 +46,9 @@ public class JGWindowManager extends JFrame
 	private JGEngine gameManager = null;
 	private Cursor cursor = null;
 	private javax.swing.Timer cursorTimer = null;
+	private volatile boolean displayReady = false;
+	private volatile boolean waitingForSystem = false;
+	private long showTime = 0;
 	public Color backgroundColor = Color.black;
 	public int width, height;
 	
@@ -331,6 +337,7 @@ public class JGWindowManager extends JFrame
 				setTitle(windowTitle);
 				setSize(width, height);
 				setLocation(xPos, yPos);
+				listenToFullScreen();
 				setVisible(true);
 				requestNativeFullScreen();
 			}
@@ -347,6 +354,9 @@ public class JGWindowManager extends JFrame
 				setLocation(screenArea.x, screenArea.y);
 				setAlwaysOnTop(true);
 				setVisible(true);
+
+				//Aqui o tamanho ja vale: nao ha animacao a esperar
+				displayReady = true;
 			}
 		}
 		else
@@ -362,7 +372,12 @@ public class JGWindowManager extends JFrame
 			//Cresce a janela para que a area util tenha exatamente a resolucao pedida.
 			Insets insets = getInsets();
 			setSize(width + insets.left + insets.right, height + insets.top + insets.bottom);
+
+			//Em modo janela nao ha transicao: a janela ja esta no lugar
+			displayReady = true;
 		}
+
+		showTime = System.currentTimeMillis();
 
 		//O foco so pode ser solicitado depois que a janela esta visivel
 		requestFocusInWindow();
@@ -370,6 +385,121 @@ public class JGWindowManager extends JFrame
 		//Reaplica o cursor invisivel: a exibicao e a tela cheia refazem o peer
 		hideCursor();
 		keepCursorHidden();
+	}
+
+	/***********************************************************
+	*Name: isDisplayReady
+	*Description: tells if the window already reached its final size, so the
+	*             game can start what it wants the player to see.
+	*
+	*             It matters because entering fullscreen on macOS is animated
+	*             and only settles about a second after showWindow returns. A
+	*             scene that starts an animation right away spends that second
+	*             drawing into a window that is still growing, and the player
+	*             misses the beginning of it.
+	*
+	*             In windowed mode, and on the systems that use the borderless
+	*             window, this is true as soon as the window is shown.
+	*Parameters: none
+	*Return: boolean
+	************************************************************/
+	public boolean isDisplayReady()
+	{
+		if (displayReady)
+		{
+			return true;
+		}
+
+		//A geometria so serve onde o sistema nao avisa. Medido no macOS, a
+		//janela informa o tamanho final aos 233 ms, mas a transicao so termina
+		//aos 953 ms: confiar no tamanho daria a largada com a animacao ainda
+		//correndo, que e exatamente o que se quer evitar.
+		if (!waitingForSystem && isCoveringScreen())
+		{
+			displayReady = true;
+			return true;
+		}
+
+		//Um sistema que nunca avise nao pode travar o jogo esperando
+		if (showTime > 0 && System.currentTimeMillis() - showTime > READY_TIMEOUT)
+		{
+			displayReady = true;
+			return true;
+		}
+
+		return false;
+	}
+
+	/***********************************************************
+	*Name: isCoveringScreen
+	*Description: tells if the window already occupies the whole screen
+	*Parameters: none
+	*Return: boolean
+	************************************************************/
+	private boolean isCoveringScreen()
+	{
+		Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+
+		return getWidth() >= screen.width && getHeight() >= screen.height;
+	}
+
+	/***********************************************************
+	*Name: listenToFullScreen
+	*Description: asks macOS to tell us when the fullscreen transition ends.
+	*             The listener is an interface, so it can be built by a proxy
+	*             and the engine keeps compiling and running elsewhere.
+	*Parameters: none
+	*Return: none
+	************************************************************/
+	private void listenToFullScreen()
+	{
+		try
+		{
+			final Class<?> listenerType = Class.forName("com.apple.eawt.FullScreenListener");
+			Class<?> utils = Class.forName("com.apple.eawt.FullScreenUtilities");
+
+			Object listener = java.lang.reflect.Proxy.newProxyInstance(
+				listenerType.getClassLoader(), new Class<?>[]{ listenerType },
+				new java.lang.reflect.InvocationHandler()
+				{
+					public Object invoke(Object proxy, java.lang.reflect.Method method, Object[] arguments)
+					{
+						String name = method.getName();
+
+						//Os metodos herdados de Object tambem chegam aqui
+						if ("hashCode".equals(name))
+						{
+							return Integer.valueOf(System.identityHashCode(proxy));
+						}
+						if ("equals".equals(name))
+						{
+							return Boolean.valueOf(proxy == arguments[0]);
+						}
+						if ("toString".equals(name))
+						{
+							return "JGWindowManager.fullScreenListener";
+						}
+
+						if ("windowEnteredFullScreen".equals(name))
+						{
+							displayReady = true;
+						}
+
+						return null;
+					}
+				});
+
+			utils.getMethod("addFullScreenListenerTo", java.awt.Window.class, listenerType)
+			     .invoke(null, this, listener);
+
+			//A partir daqui quem manda e o aviso do sistema
+			waitingForSystem = true;
+		}
+		catch(Throwable t)
+		{
+			//Sem o aviso do sistema restam a geometria e o tempo limite
+			JGLog.writeLog("AVISO DE TELA CHEIA INDISPONIVEL: " + t + "\n");
+		}
 	}
 
 	/***********************************************************
@@ -638,6 +768,8 @@ public class JGWindowManager extends JFrame
 			cursorTimer = null;
 		}
 
+		displayReady = false;
+		waitingForSystem = false;
 		windowTitle = null;
 		cursor = null;
 		gameManager = null;
