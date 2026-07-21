@@ -24,6 +24,7 @@ public class JGTopDownLayer extends JGLayer
 {
 	//Class attributes
 	private int[] vetHeights = null;
+	private int maxHeight = 0;
 	private int wallFrameIndex = -1;
 	private double perspective = 0.12;
 	private JGVector2D cameraCenter = null;
@@ -177,6 +178,8 @@ public class JGTopDownLayer extends JGLayer
 			}
 		}
 
+		updateMaxHeight();
+
 		//O mapa so e necessario durante a construcao
 		JGImageManager.free(heightImage);
 	}
@@ -203,6 +206,7 @@ public class JGTopDownLayer extends JGLayer
 		}
 
 		vetHeights[wrap(column, columns) + wrap(line, lines) * columns] = Math.max(0, height);
+		maxHeight = Math.max(maxHeight, height);
 	}
 
 	/***********************************************************
@@ -329,7 +333,7 @@ public class JGTopDownLayer extends JGLayer
 		//OS PREDIOS
 		//Uma construcao alta se projeta para fora, entao pode aparecer mesmo
 		//com a base fora da tela: a margem cresce com a altura possivel.
-		int margin = 1 + (int)Math.ceil(maxHeight() * perspective *
+		int margin = 1 + (int)Math.ceil(maxHeight * perspective *
 		                 Math.max(screenWidth, screenHeight) / Math.min(blockWidth, blockHeight));
 
 		double cameraX = getCameraX();
@@ -463,21 +467,22 @@ public class JGTopDownLayer extends JGLayer
 	}
 
 	/***********************************************************
-	*Name: maxHeight
-	*Description: tallest stack of the map
+	*Name: updateMaxHeight
+	*Description: recalculates the tallest stack of the map. The drawing needs
+	*             this number every frame to know how far outside the screen a
+	*             building may still show up, and varrer o mapa inteiro a cada
+	*             quadro custaria caro num mapa grande.
 	*Parameters: none
-	*Return: int
+	*Return: void
 	************************************************************/
-	private int maxHeight()
+	private void updateMaxHeight()
 	{
-		int maior = 0;
+		maxHeight = 0;
 
 		for (int index = 0; index < vetHeights.length; index++)
 		{
-			maior = Math.max(maior, vetHeights[index]);
+			maxHeight = Math.max(maxHeight, vetHeights[index]);
 		}
-
-		return maior;
 	}
 
 	/***********************************************************
@@ -498,6 +503,14 @@ public class JGTopDownLayer extends JGLayer
 		double stepX = ((x + blockWidth / 2.0) - cameraX) * perspective;
 		double stepY = ((y + blockHeight / 2.0) - cameraY) * perspective;
 
+		//A face encostada num vizinho da mesma altura e uma parede interna:
+		//desenha-la faria um predio largo parecer varias caixas encostadas.
+		//Por andar, porque um vizinho mais baixo so esconde os primeiros.
+		int westHeight = getHeightByCell(column - 1, line);
+		int eastHeight = getHeightByCell(column + 1, line);
+		int northHeight = getHeightByCell(column, line - 1);
+		int southHeight = getHeightByCell(column, line + 1);
+
 		//As paredes visiveis sao as viradas para a camera
 		for (int floor = 0; floor < height; floor++)
 		{
@@ -506,20 +519,32 @@ public class JGTopDownLayer extends JGLayer
 
 			if (stepX > 0)
 			{
-				drawFace(baseX, baseY, 0, blockHeight, stepX, stepY, graphics);
+				if (westHeight <= floor)
+				{
+					drawFace(baseX, baseY, 0, blockHeight, stepX, stepY, graphics);
+				}
 			}
 			else if (stepX < 0)
 			{
-				drawFace(baseX + blockWidth, baseY, 0, blockHeight, stepX, stepY, graphics);
+				if (eastHeight <= floor)
+				{
+					drawFace(baseX + blockWidth, baseY, 0, blockHeight, stepX, stepY, graphics);
+				}
 			}
 
 			if (stepY > 0)
 			{
-				drawFace(baseX, baseY, blockWidth, 0, stepX, stepY, graphics);
+				if (northHeight <= floor)
+				{
+					drawFace(baseX, baseY, blockWidth, 0, stepX, stepY, graphics);
+				}
 			}
 			else if (stepY < 0)
 			{
-				drawFace(baseX, baseY + blockHeight, blockWidth, 0, stepX, stepY, graphics);
+				if (southHeight <= floor)
+				{
+					drawFace(baseX, baseY + blockHeight, blockWidth, 0, stepX, stepY, graphics);
+				}
 			}
 		}
 
