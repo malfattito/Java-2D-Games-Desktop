@@ -7,7 +7,12 @@ public class CidadePrincipal
 	{
 		JGEngine engine = new JGEngine();
 
-		engine.windowManager.setResolution(800, 600, 32);
+		//DESENHA NA RESOLUCAO REAL DO MONITOR. COM UM BUFFER MENOR, A TELA
+		//CHEIA AMPLIARIA A IMAGEM E JOGARIA FORA O DETALHE DOS TILES.
+		java.awt.DisplayMode modo = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
+		                                .getDefaultScreenDevice().getDisplayMode();
+
+		engine.windowManager.setResolution(modo.getWidth(), modo.getHeight(), 32);
 		engine.windowManager.setWindowTitle("JGames2D - Cidade");
 		engine.windowManager.setfullScreen(true);
 

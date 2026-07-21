@@ -16,7 +16,7 @@ import JGames2D.JGVector2D;
 public class CenaCidadeIlhas extends JGLevel
 {
 	//LADO DO BLOCO E TAMANHO DOS MAPAS, EM BLOCOS
-	private static final int LADO_BLOCO = 64;
+	private static final int LADO_BLOCO = 128;
 	private static final int COLUNAS = 160;
 	private static final int LINHAS = 224;
 

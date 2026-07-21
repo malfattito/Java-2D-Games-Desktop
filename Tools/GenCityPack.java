@@ -8,7 +8,7 @@ import javax.imageio.ImageIO;
 // e a previa colorida que serve de minimapa.
 public class GenCityPack
 {
-	static final int T = 64, COLS = 6, ROWS = 4;   // 24 tiles
+	static final int T = 128, COLS = 6, ROWS = 4;   // 24 tiles de 128x128
 
 	// indices dos tiles
 	static final int ASFALTO=0, RUA_V=1, RUA_H=2, CRUZAMENTO=3, CALCADA=4, GRAMA=5,
@@ -85,161 +85,399 @@ public class GenCityPack
 		return e;
 	}
 
+	// ---------------- ruido periodico ----------------
+	// O mesmo tile se repete em celulas vizinhas, entao o ruido precisa fechar
+	// nas bordas: os pontos da grade dao a volta com o resto da divisao.
+	static class Ruido
+	{
+		double[][] grade; int lado;
+		Ruido(int lado, Random r)
+		{
+			this.lado = lado;
+			grade = new double[lado][lado];
+			for (int y=0;y<lado;y++) for (int x=0;x<lado;x++) grade[y][x]=r.nextDouble();
+		}
+		double suave(double t){ return t*t*(3-2*t); }
+		double amostra(double x, double y)   // x,y em [0,1)
+		{
+			double fx=x*lado, fy=y*lado;
+			int x0=(int)Math.floor(fx), y0=(int)Math.floor(fy);
+			double tx=suave(fx-x0), ty=suave(fy-y0);
+			int x1=(x0+1)%lado, y1=(y0+1)%lado; x0=((x0%lado)+lado)%lado; y0=((y0%lado)+lado)%lado;
+			double a=grade[y0][x0], b=grade[y0][x1], c=grade[y1][x0], d=grade[y1][x1];
+			return (a*(1-tx)+b*tx)*(1-ty) + (c*(1-tx)+d*tx)*ty;
+		}
+	}
+
+	static double fbm(Ruido[] oitavas, double x, double y)
+	{
+		double soma=0, peso=0, amp=1;
+		for (Ruido o : oitavas){ soma += amp*o.amostra(x,y); peso += amp; amp*=0.5; }
+		return soma/peso;
+	}
+
+	// Preenche o tile com uma textura de ruido em volta de uma cor base
+	static void textura(BufferedImage img, int ox, int oy, Color base, double forca, long semente, int detalhe)
+	{
+		Random r = new Random(semente);
+		Ruido[] oitavas = { new Ruido(detalhe, r), new Ruido(detalhe*2, r), new Ruido(detalhe*4, r) };
+		for (int y=0;y<T;y++)
+			for (int x=0;x<T;x++)
+			{
+				double n = fbm(oitavas, x/(double)T, y/(double)T) - 0.5;
+				int rr=cl((int)(base.getRed()  *(1+n*forca)));
+				int gg=cl((int)(base.getGreen()*(1+n*forca)));
+				int bb=cl((int)(base.getBlue() *(1+n*forca)));
+				img.setRGB(ox+x, oy+y, 0xFF000000 | (rr<<16) | (gg<<8) | bb);
+			}
+	}
+
+	// Escurece as bordas de baixo e da direita: da a impressao de luz vinda
+	// de cima e da esquerda, o que separa visualmente os blocos
+	static void luz(Graphics2D g, int ox, int oy)
+	{
+		g.setColor(new Color(255,255,255,26)); g.fillRect(ox,oy,T,2); g.fillRect(ox,oy,2,T);
+		g.setColor(new Color(0,0,0,40)); g.fillRect(ox,oy+T-2,T,2); g.fillRect(ox+T-2,oy,2,T);
+	}
+
 	// ---------------- desenho dos tiles ----------------
 	static Random r;
+	static BufferedImage folha;
 
-	static void ruido(Graphics2D g,int ox,int oy,Color base,int qtd,int var)
-	{
-		for (int i=0;i<qtd;i++){int d=r.nextInt(var*2)-var;
-			g.setColor(new Color(cl(base.getRed()+d),cl(base.getGreen()+d),cl(base.getBlue()+d)));
-			g.fillRect(ox+r.nextInt(T),oy+r.nextInt(T),2,2);}
-	}
 	static int cl(int v){return Math.max(0,Math.min(255,v));}
 	static Color escurece(Color c,double f){return new Color(cl((int)(c.getRed()*f)),cl((int)(c.getGreen()*f)),cl((int)(c.getBlue()*f)));}
+	static Color mistura(Color a, Color b, double t)
+	{ return new Color(cl((int)(a.getRed()*(1-t)+b.getRed()*t)), cl((int)(a.getGreen()*(1-t)+b.getGreen()*t)), cl((int)(a.getBlue()*(1-t)+b.getBlue()*t))); }
 
-	static void janelas(Graphics2D g,int ox,int oy,Estilo e,Color parede)
+	// asfalto: agregado fino, manchas de remendo e o desgaste dos pneus
+	static void asfalto(Graphics2D g,int ox,int oy,Estilo e,long semente)
 	{
-		g.setColor(parede); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,parede,90,8);
-		g.setColor(e.vidro);
-		if (e.janela==0)            // altas e estreitas
-			for(int fy=6;fy<T-10;fy+=20) for(int fx=8;fx<T-10;fx+=16){
-				g.setColor(e.vidro); g.fillRect(ox+fx,oy+fy,9,14);
-				g.setColor(escurece(e.vidro,1.35)); g.fillRect(ox+fx,oy+fy,9,4); }
-		else if (e.janela==1)       // quadradas com moldura
-			for(int fy=8;fy<T-12;fy+=22) for(int fx=9;fx<T-12;fx+=22){
-				g.setColor(escurece(parede,0.75)); g.fillRect(ox+fx-2,oy+fy-2,16,16);
-				g.setColor(e.vidro); g.fillRect(ox+fx,oy+fy,12,12); }
-		else                         // faixa continua
-			for(int fy=10;fy<T-12;fy+=20){
-				g.setColor(e.vidro); g.fillRect(ox+6,oy+fy,T-12,9);
-				g.setColor(escurece(parede,0.7)); g.drawRect(ox+6,oy+fy,T-12,9); }
-		g.setColor(escurece(parede,0.7)); g.drawRect(ox,oy,T-1,T-1);
+		textura(folha,ox,oy,e.asfalto,0.30,semente,8);
+		Random rr=new Random(semente);
+		//pedrisco
+		for(int i=0;i<900;i++){
+			int x=ox+rr.nextInt(T), y=oy+rr.nextInt(T);
+			int d=rr.nextInt(46)-18;
+			g.setColor(new Color(cl(e.asfalto.getRed()+d),cl(e.asfalto.getGreen()+d),cl(e.asfalto.getBlue()+d),190));
+			g.fillRect(x,y,1+rr.nextInt(2),1+rr.nextInt(2)); }
+		//remendos
+		for(int i=0;i<2;i++){
+			int x=ox+rr.nextInt(T-40), y=oy+rr.nextInt(T-40);
+			g.setColor(new Color(0,0,0,22)); g.fillOval(x,y,26+rr.nextInt(30),20+rr.nextInt(24)); }
+		//trilha dos pneus
+		g.setColor(new Color(0,0,0,14));
+		g.fillRect(ox+T/4-9,oy,18,T); g.fillRect(ox+3*T/4-9,oy,18,T);
+	}
+
+	// faixa pintada com desgaste, para nao parecer adesivo
+	static void faixaPintada(Graphics2D g,int x,int y,int w,int h,Color cor,Random rr)
+	{
+		g.setColor(cor); g.fillRect(x,y,w,h);
+		g.setColor(new Color(0,0,0,40));
+		for(int i=0;i<w*h/8;i++) g.fillRect(x+rr.nextInt(w),y+rr.nextInt(h),1,1);
+	}
+
+	static void desenhaTile(Graphics2D g,int i,int ox,int oy,Estilo e)
+	{
+		Random rr = new Random(e.semente*97 + i*131);
+		switch(i)
+		{
+		case ASFALTO: asfalto(g,ox,oy,e,e.semente+i); break;
+
+		case RUA_V:
+			asfalto(g,ox,oy,e,e.semente+i);
+			for(int k=0;k<4;k++) faixaPintada(g,ox+T/2-3,oy+k*32+8,6,16,e.faixa,rr);
+			break;
+
+		case RUA_H:
+			asfalto(g,ox,oy,e,e.semente+i);
+			for(int k=0;k<4;k++) faixaPintada(g,ox+k*32+8,oy+T/2-3,16,6,e.faixa,rr);
+			break;
+
+		case CRUZAMENTO:
+			asfalto(g,ox,oy,e,e.semente+i);
+			for(int k=0;k<5;k++){
+				faixaPintada(g,ox+12+k*24,oy+4,14,20,new Color(236,236,232),rr);
+				faixaPintada(g,ox+12+k*24,oy+T-24,14,20,new Color(236,236,232),rr); }
+			break;
+
+		case CALCADA: case HOTDOG:
+		{
+			textura(folha,ox,oy,e.calcada,0.16,e.semente+i,6);
+			//lajotas com chanfro
+			int lado=32;
+			for(int y=0;y<T;y+=lado) for(int x=0;x<T;x+=lado){
+				int d=rr.nextInt(16)-8;
+				g.setColor(new Color(cl(e.calcada.getRed()+d),cl(e.calcada.getGreen()+d),cl(e.calcada.getBlue()+d),90));
+				g.fillRect(ox+x+1,oy+y+1,lado-2,lado-2);
+				g.setColor(new Color(255,255,255,50)); g.drawLine(ox+x+1,oy+y+1,ox+x+lado-2,oy+y+1);
+				g.setColor(new Color(0,0,0,55)); g.drawLine(ox+x+1,oy+y+lado-2,ox+x+lado-2,oy+y+lado-2);
+				g.setColor(escurece(e.calcada,0.72)); g.drawRect(ox+x,oy+y,lado,lado); }
+			if (i==HOTDOG)
+			{
+				//sombra no chao, carrinho, guarda-sol listrado e vapor
+				g.setColor(new Color(0,0,0,70)); g.fillOval(ox+30,oy+78,66,24);
+				g.setColor(new Color(190,190,196)); g.fillRoundRect(ox+40,oy+58,48,34,8,8);
+				g.setColor(new Color(150,150,158)); g.fillRect(ox+40,oy+74,48,4);
+				g.setColor(new Color(120,120,126)); g.fillOval(ox+44,oy+86,14,14); g.fillOval(ox+72,oy+86,14,14);
+				g.setColor(new Color(60,60,64)); g.drawOval(ox+44,oy+86,14,14); g.drawOval(ox+72,oy+86,14,14);
+				g.setColor(new Color(210,180,120)); g.fillRect(ox+50,oy+64,28,8);
+				g.setColor(new Color(90,90,96)); g.fillRect(ox+62,oy+30,4,32);
+				g.setColor(new Color(200,55,50)); g.fillOval(ox+24,oy+14,80,42);
+				g.setColor(new Color(240,240,240));
+				for(int k=0;k<5;k++) g.fillArc(ox+24,oy+14,80,42,k*72+8,26);
+				g.setColor(new Color(0,0,0,45)); g.fillArc(ox+24,oy+34,80,22,180,180);
+				g.setColor(new Color(255,255,255,60));
+				for(int k=0;k<3;k++) g.fillOval(ox+58+k*3,oy+50-k*7,7-k,7-k);
+			}
+			luz(g,ox,oy); break;
+		}
+
+		case GRAMA: case ARBUSTO:
+		{
+			textura(folha,ox,oy,e.grama,0.34,e.semente+i,7);
+			//tufos de capim
+			for(int k=0;k<450;k++){
+				int x=ox+rr.nextInt(T), y=oy+rr.nextInt(T);
+				g.setColor(rr.nextBoolean()? new Color(255,255,255,26) : new Color(0,0,0,26));
+				g.drawLine(x,y,x+rr.nextInt(3)-1,y-2-rr.nextInt(3)); }
+			if (i==ARBUSTO)
+				for(int k=0;k<3;k++){
+					int bx=ox+16+rr.nextInt(64), by=oy+16+rr.nextInt(64), rad=26+rr.nextInt(16);
+					g.setColor(new Color(0,0,0,80)); g.fillOval(bx+5,by+8,rad,rad*3/4);
+					for(int c=0;c<9;c++){
+						int px=bx+rr.nextInt(rad/2), py=by+rr.nextInt(rad/2), pr=rad/2+rr.nextInt(rad/3);
+						g.setColor(mistura(e.arbusto,new Color(0,0,0),0.25+rr.nextDouble()*0.2));
+						g.fillOval(px,py,pr,pr); }
+					for(int c=0;c<7;c++){
+						int px=bx+rr.nextInt(rad/2), py=by+rr.nextInt(rad/3), pr=rad/3+rr.nextInt(rad/4);
+						g.setColor(mistura(e.arbusto,new Color(255,255,255),0.15+rr.nextDouble()*0.25));
+						g.fillOval(px,py,pr,pr); } }
+			break;
+		}
+
+		case AGUA:
+		{
+			textura(folha,ox,oy,e.agua,0.22,e.semente+i,5);
+			//ondulacao e brilhos
+			for(int y=0;y<T;y++){
+				double onda=Math.sin((y/(double)T)*Math.PI*4)*0.5+0.5;
+				g.setColor(new Color(255,255,255,(int)(10+onda*14)));
+				g.drawLine(ox,oy+y,ox+T,oy+y); }
+			g.setColor(new Color(255,255,255,90));
+			for(int k=0;k<14;k++){
+				int x=ox+rr.nextInt(T-24), y=oy+rr.nextInt(T);
+				g.fillRoundRect(x,y,10+rr.nextInt(14),2,2,2); }
+			break;   // sem luz nas bordas: o mar e continuo
+		}
+
+		case AREIA:
+		{
+			textura(folha,ox,oy,e.areia,0.20,e.semente+i,7);
+			for(int k=0;k<1400;k++){
+				int x=ox+rr.nextInt(T), y=oy+rr.nextInt(T);
+				g.setColor(rr.nextBoolean()? new Color(255,255,255,40) : new Color(120,100,70,40));
+				g.fillRect(x,y,1,1); }
+			//marcas do vento
+			g.setColor(new Color(0,0,0,16));
+			for(int k=0;k<6;k++) g.drawArc(ox-20+rr.nextInt(T),oy+rr.nextInt(T),80,26,0,180);
+			break;
+		}
+
+		case ESTACIONAMENTO:
+		{
+			asfalto(g,ox,oy,e,e.semente+i);
+			for(int k=0;k<=T;k+=32) faixaPintada(g,ox+k,oy+14,4,T-28,new Color(226,226,220),rr);
+			break;
+		}
+
+		case TELHADO_A: case TELHADO_B: case TELHADO_C: case TELHADO_TOPO:
+		{
+			Color base = (i==TELHADO_TOPO)? e.telhado[1] : e.telhado[i-TELHADO_A];
+			textura(folha,ox,oy,base,0.18,e.semente+i,6);
+			//juntas das placas
+			g.setColor(escurece(base,0.85));
+			for(int k=0;k<=T;k+=42){ g.drawLine(ox+k,oy,ox+k,oy+T); g.drawLine(ox,oy+k,ox+T,oy+k); }
+			//parapeito: faixa clara na volta e sombra por dentro
+			g.setColor(escurece(base,1.18)); g.fillRect(ox,oy,T,6); g.fillRect(ox,oy,6,T);
+			g.fillRect(ox,oy+T-6,T,6); g.fillRect(ox+T-6,oy,6,T);
+			g.setColor(new Color(0,0,0,60)); g.fillRect(ox+6,oy+6,T-12,7); g.fillRect(ox+6,oy+6,7,T-12);
+
+			if (i==TELHADO_TOPO)
+			{
+				g.setColor(escurece(base,0.72)); g.fillOval(ox+22,oy+22,84,84);
+				g.setColor(new Color(240,240,240)); g.setStroke(new BasicStroke(5));
+				g.drawOval(ox+28,oy+28,72,72);
+				g.drawLine(ox+46,oy+46,ox+82,oy+82); g.drawLine(ox+82,oy+46,ox+46,oy+82);
+				g.setStroke(new BasicStroke(1));
+			}
+			else
+			{
+				//equipamentos: condensadoras, caixa d'agua e clarabóia
+				for(int k=0;k<2;k++){
+					int x=ox+18+rr.nextInt(56), y=oy+18+rr.nextInt(56);
+					g.setColor(new Color(0,0,0,70)); g.fillRect(x+3,y+4,22,16);
+					g.setColor(new Color(150,152,156)); g.fillRect(x,y,22,16);
+					g.setColor(new Color(110,112,116));
+					for(int l=2;l<14;l+=3) g.drawLine(x+2,y+l,x+20,y+l);
+					g.setColor(new Color(190,192,196)); g.drawRect(x,y,22,16); }
+				int cx=ox+72+rr.nextInt(20), cy=oy+72+rr.nextInt(20);
+				g.setColor(new Color(0,0,0,70)); g.fillOval(cx+4,cy+5,26,20);
+				g.setColor(new Color(176,178,182)); g.fillOval(cx,cy,26,20);
+				g.setColor(new Color(140,142,146)); g.drawOval(cx,cy,26,20);
+				g.setColor(new Color(120,160,190,180)); g.fillRect(ox+18,oy+86,24,20);
+				g.setColor(new Color(90,92,96)); g.drawRect(ox+18,oy+86,24,20);
+			}
+			break;
+		}
+
+		case TELHADO_CASA:
+		{
+			textura(folha,ox,oy,e.telhadoCasa,0.16,e.semente+i,6);
+			//fiadas de telha, com sombra sob cada fiada
+			for(int y=0;y<T;y+=14){
+				g.setColor(new Color(0,0,0,70)); g.fillRect(ox,oy+y+11,T,3);
+				for(int x=(y/14%2)*10;x<T;x+=20){
+					g.setColor(mistura(e.telhadoCasa,new Color(255,255,255),0.06+rr.nextDouble()*0.12));
+					g.fillRoundRect(ox+x,oy+y,18,11,5,5); } }
+			//cumeeira e chamine
+			g.setColor(escurece(e.telhadoCasa,0.7)); g.fillRect(ox,oy+T/2-3,T,6);
+			g.setColor(new Color(0,0,0,80)); g.fillRect(ox+T-40,oy+18,26,30);
+			g.setColor(new Color(126,110,100)); g.fillRect(ox+T-44,oy+14,26,30);
+			g.setColor(new Color(96,84,76)); g.fillRect(ox+T-46,oy+10,30,7);
+			luz(g,ox,oy); break;
+		}
+
+		case PAREDE_A: case PAREDE_B: case PAREDE_C:
+		{
+			Color parede = e.parede[i-PAREDE_A];
+			textura(folha,ox,oy,parede,0.14,e.semente+i,6);
+			int alturaAndar = T/2;
+			for(int andar=0; andar<2; andar++)
+			{
+				int base = oy + andar*alturaAndar;
+				//friso entre andares
+				g.setColor(escurece(parede,1.12)); g.fillRect(ox,base,T,4);
+				g.setColor(new Color(0,0,0,55)); g.fillRect(ox,base+4,T,3);
+
+				if (e.janela==0)          // altas e estreitas
+					for(int fx=12; fx<T-22; fx+=26) janela(g,ox+fx,base+16,16,36,e,parede,rr);
+				else if (e.janela==1)     // quadradas
+					for(int fx=16; fx<T-26; fx+=32) janela(g,ox+fx,base+18,22,22,e,parede,rr);
+				else                       // faixa continua
+					janela(g,ox+10,base+18,T-20,20,e,parede,rr);
+			}
+			g.setColor(new Color(0,0,0,70)); g.fillRect(ox,oy+T-5,T,5);
+			g.setColor(escurece(parede,0.7)); g.drawRect(ox,oy,T-1,T-1);
+			break;
+		}
+
+		case PAREDE_CASA:
+		{
+			textura(folha,ox,oy,e.paredeCasa,0.12,e.semente+i,6);
+			//porta com soleira e macaneta
+			g.setColor(new Color(0,0,0,60)); g.fillRect(ox+50,oy+52,36,76);
+			g.setColor(escurece(e.paredeCasa,0.5)); g.fillRect(ox+48,oy+50,36,74);
+			g.setColor(escurece(e.paredeCasa,0.38)); g.drawRect(ox+48,oy+50,36,74);
+			g.setColor(new Color(220,200,120)); g.fillOval(ox+76,oy+86,5,5);
+			janela(g,ox+14,oy+40,28,28,e,e.paredeCasa,rr);
+			janela(g,ox+96,oy+40,22,28,e,e.paredeCasa,rr);
+			g.setColor(escurece(e.paredeCasa,0.7)); g.drawRect(ox,oy,T-1,T-1);
+			break;
+		}
+
+		case PONTE_V: case PONTE_H:
+		{
+			asfalto(g,ox,oy,e,e.semente+i);
+			Color rail=new Color(202,198,192);
+			if (i==PONTE_V){
+				for(int k=0;k<4;k++) faixaPintada(g,ox+T/2-3,oy+k*32+8,6,16,e.faixa,rr);
+				//junta de dilatacao
+				g.setColor(new Color(0,0,0,70)); g.fillRect(ox,oy+T-4,T,4);
+				for(int lado=0;lado<2;lado++){
+					int bx = (lado==0)? ox : ox+T-16;
+					g.setColor(new Color(0,0,0,90)); g.fillRect(bx+ (lado==0?12:-4),oy,6,T);
+					g.setColor(escurece(rail,0.62)); g.fillRect(bx,oy,16,T);
+					g.setColor(rail); g.fillRect(bx+2,oy,7,T);
+					g.setColor(escurece(rail,0.8)); for(int k=0;k<T;k+=22) g.fillRect(bx+2,oy+k,12,7);
+					g.setColor(new Color(255,255,255,70)); g.fillRect(bx+2,oy,2,T); } }
+			else {
+				for(int k=0;k<4;k++) faixaPintada(g,ox+k*32+8,oy+T/2-3,16,6,e.faixa,rr);
+				g.setColor(new Color(0,0,0,70)); g.fillRect(ox+T-4,oy,4,T);
+				for(int lado=0;lado<2;lado++){
+					int by = (lado==0)? oy : oy+T-16;
+					g.setColor(new Color(0,0,0,90)); g.fillRect(ox,by+(lado==0?12:-4),T,6);
+					g.setColor(escurece(rail,0.62)); g.fillRect(ox,by,T,16);
+					g.setColor(rail); g.fillRect(ox,by+2,T,7);
+					g.setColor(escurece(rail,0.8)); for(int k=0;k<T;k+=22) g.fillRect(ox+k,by+2,7,12);
+					g.setColor(new Color(255,255,255,70)); g.fillRect(ox,by+2,T,2); } }
+			break;
+		}
+
+		case PRACA:
+		{
+			Color piso = escurece(e.calcada,0.95);
+			textura(folha,ox,oy,piso,0.14,e.semente+i,6);
+			//piso em espinha, com um canteiro no meio
+			g.setColor(escurece(piso,0.82));
+			for(int k=0;k<=T;k+=21){ g.drawLine(ox+k,oy,ox+k,oy+T); g.drawLine(ox,oy+k,ox+T,oy+k); }
+			g.setColor(new Color(0,0,0,60)); g.fillOval(ox+42,oy+48,46,40);
+			g.setColor(escurece(e.grama,0.9)); g.fillOval(ox+38,oy+42,48,42);
+			for(int c=0;c<8;c++){
+				g.setColor(mistura(e.arbusto,new Color(255,255,255),rr.nextDouble()*0.3));
+				g.fillOval(ox+42+rr.nextInt(30),oy+46+rr.nextInt(26),18,16); }
+			luz(g,ox,oy); break;
+		}
+
+		default:
+		{
+			Color te=new Color(146,118,82);
+			textura(folha,ox,oy,te,0.26,e.semente+i,7);
+			for(int k=0;k<600;k++){ int x=ox+rr.nextInt(T), y=oy+rr.nextInt(T);
+				g.setColor(new Color(0,0,0,30)); g.fillRect(x,y,2,2); }
+			break;
+		}
+		}
+	}
+
+	// janela com moldura, peitoril, vidro em degrade e reflexo
+	static void janela(Graphics2D g,int x,int y,int w,int h,Estilo e,Color parede,Random rr)
+	{
+		g.setColor(new Color(0,0,0,70)); g.fillRect(x+2,y+3,w,h);
+		g.setColor(escurece(parede,0.78)); g.fillRect(x-2,y-2,w+4,h+4);
+		for(int k=0;k<h;k++){
+			double t=k/(double)h;
+			g.setColor(mistura(escurece(e.vidro,1.25), escurece(e.vidro,0.7), t));
+			g.drawLine(x,y+k,x+w,y+k); }
+		//reflexo na diagonal
+		g.setColor(new Color(255,255,255,60));
+		g.fillPolygon(new int[]{x,x+w/2,x+w/3,x}, new int[]{y+h,y,y,y+h/2}, 4);
+		//caixilho
+		g.setColor(escurece(parede,0.55));
+		g.drawRect(x,y,w,h);
+		if (w>18) g.drawLine(x+w/2,y,x+w/2,y+h);
+		if (h>24) g.drawLine(x,y+h/2,x+w,y+h/2);
+		//peitoril
+		g.setColor(escurece(parede,1.2)); g.fillRect(x-3,y+h,w+6,3);
+		g.setColor(new Color(0,0,0,60)); g.fillRect(x-3,y+h+3,w+6,2);
+		//algumas luzes acesas
+		if (rr.nextInt(6)==0){ g.setColor(new Color(255,236,170,120)); g.fillRect(x+1,y+1,w-1,h-1); }
 	}
 
 	static BufferedImage criaTileset(Estilo e)
 	{
 		r = new Random(e.semente);
-		BufferedImage sheet = new BufferedImage(T*COLS, T*ROWS, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = sheet.createGraphics();
+		folha = new BufferedImage(T*COLS, T*ROWS, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = folha.createGraphics();
 		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
 		for (int i=0;i<COLS*ROWS;i++)
 		{
-			int ox=(i%COLS)*T, oy=(i/COLS)*T;
-			switch(i)
-			{
-			case ASFALTO: g.setColor(e.asfalto); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,e.asfalto,140,10); break;
-			case RUA_V:
-				g.setColor(e.asfalto); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,e.asfalto,140,10);
-				g.setColor(e.faixa); for(int k=0;k<4;k++) g.fillRect(ox+T/2-2,oy+k*16+4,4,8); break;
-			case RUA_H:
-				g.setColor(e.asfalto); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,e.asfalto,140,10);
-				g.setColor(e.faixa); for(int k=0;k<4;k++) g.fillRect(ox+k*16+4,oy+T/2-2,8,4); break;
-			case CRUZAMENTO:
-				g.setColor(e.asfalto); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,e.asfalto,140,10);
-				g.setColor(new Color(232,232,232));
-				for(int k=0;k<5;k++){ g.fillRect(ox+6+k*12,oy+2,7,10); g.fillRect(ox+6+k*12,oy+T-12,7,10);} break;
-			case CALCADA:
-				g.setColor(e.calcada); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,e.calcada,110,8);
-				g.setColor(escurece(e.calcada,0.86));
-				for(int k=0;k<=T;k+=16){ g.drawLine(ox+k,oy,ox+k,oy+T); g.drawLine(ox,oy+k,ox+T,oy+k);} break;
-			case GRAMA: g.setColor(e.grama); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,e.grama,240,16); break;
-			case ARBUSTO:
-				g.setColor(e.grama); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,e.grama,240,16);
-				for(int k=0;k<3;k++){
-					int bx=ox+10+r.nextInt(34), by=oy+10+r.nextInt(34), rad=10+r.nextInt(8);
-					g.setColor(escurece(e.arbusto,0.75)); g.fillOval(bx+2,by+3,rad,rad);
-					g.setColor(e.arbusto); g.fillOval(bx,by,rad,rad);
-					g.setColor(escurece(e.arbusto,1.25)); g.fillOval(bx+2,by+2,rad/2,rad/2);} break;
-			case AGUA:
-				g.setColor(e.agua); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,e.agua,140,8);
-				g.setColor(escurece(e.agua,1.4));
-				for(int k=0;k<5;k++) g.drawLine(ox+6+(k%2)*8,oy+8+k*12,ox+30+(k%2)*8,oy+8+k*12); break;
-			case AREIA: g.setColor(e.areia); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,e.areia,200,12); break;
-			case ESTACIONAMENTO:
-				g.setColor(e.asfalto); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,e.asfalto,140,10);
-				g.setColor(new Color(220,220,220)); for(int k=0;k<=T;k+=16) g.drawLine(ox+k,oy+8,ox+k,oy+T-8); break;
-			case TELHADO_A: case TELHADO_B: case TELHADO_C:
-			{
-				Color base = e.telhado[i-TELHADO_A];
-				g.setColor(base); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,base,120,10);
-				g.setColor(escurece(base,0.8)); g.drawRect(ox+1,oy+1,T-3,T-3);
-				g.setColor(escurece(base,0.7)); g.fillRect(ox+12,oy+12,14,10);
-				g.setColor(escurece(base,1.15)); g.fillRect(ox+T-26,oy+T-22,16,12); break;
-			}
-			case TELHADO_CASA:
-			{
-				g.setColor(e.telhadoCasa); g.fillRect(ox,oy,T,T);
-				g.setColor(escurece(e.telhadoCasa,0.82));
-				for(int k=0;k<T;k+=8) g.drawLine(ox,oy+k,ox+T,oy+k);       // telhas
-				g.setColor(escurece(e.telhadoCasa,0.6)); g.drawRect(ox,oy,T-1,T-1);
-				g.setColor(new Color(120,116,112)); g.fillRect(ox+T-20,oy+8,10,14); break;   // chamine
-			}
-			case PAREDE_A: janelas(g,ox,oy,e,e.parede[0]); break;
-			case PAREDE_B: janelas(g,ox,oy,e,e.parede[1]); break;
-			case PAREDE_C: janelas(g,ox,oy,e,e.parede[2]); break;
-			case PAREDE_CASA:
-			{
-				g.setColor(e.paredeCasa); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,e.paredeCasa,80,8);
-				g.setColor(escurece(e.paredeCasa,0.6)); g.fillRect(ox+24,oy+26,16,38);   // porta
-				g.setColor(e.vidro); g.fillRect(ox+8,oy+16,14,14); g.fillRect(ox+44,oy+16,14,14);
-				g.setColor(escurece(e.paredeCasa,0.7)); g.drawRect(ox,oy,T-1,T-1); break;
-			}
-			case PONTE_V: case PONTE_H:
-			{
-				g.setColor(e.asfalto); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,e.asfalto,120,8);
-				Color rail = new Color(196,192,186);
-				if (i==PONTE_V){
-					g.setColor(e.faixa); for(int k=0;k<4;k++) g.fillRect(ox+T/2-2,oy+k*16+4,4,8);
-					g.setColor(escurece(rail,0.6)); g.fillRect(ox,oy,7,T); g.fillRect(ox+T-7,oy,7,T);
-					g.setColor(rail); g.fillRect(ox+1,oy,4,T); g.fillRect(ox+T-5,oy,4,T);
-					g.setColor(escurece(rail,0.8)); for(int k=4;k<T;k+=12){ g.fillRect(ox+1,oy+k,4,3); g.fillRect(ox+T-5,oy+k,4,3);} }
-				else {
-					g.setColor(e.faixa); for(int k=0;k<4;k++) g.fillRect(ox+k*16+4,oy+T/2-2,8,4);
-					g.setColor(escurece(rail,0.6)); g.fillRect(ox,oy,T,7); g.fillRect(ox,oy+T-7,T,7);
-					g.setColor(rail); g.fillRect(ox,oy+1,T,4); g.fillRect(ox,oy+T-5,T,4);
-					g.setColor(escurece(rail,0.8)); for(int k=4;k<T;k+=12){ g.fillRect(ox+k,oy+1,3,4); g.fillRect(ox+k,oy+T-5,3,4);} }
-				break;
-			}
-			case HOTDOG:
-			{
-				g.setColor(e.calcada); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,e.calcada,80,8);
-				g.setColor(escurece(e.calcada,0.86));
-				for(int k=0;k<=T;k+=16){ g.drawLine(ox+k,oy,ox+k,oy+T); g.drawLine(ox,oy+k,ox+T,oy+k);}
-				//guarda-sol listrado e o carrinho
-				g.setColor(new Color(40,40,40)); g.fillOval(ox+16,oy+40,32,12);
-				g.setColor(new Color(210,60,50)); g.fillOval(ox+12,oy+12,40,30);
-				g.setColor(new Color(240,240,240));
-				for(int k=0;k<4;k++) g.fillArc(ox+12,oy+12,40,30,90+k*90-14,14);
-				g.setColor(new Color(180,180,185)); g.fillRect(ox+22,oy+30,20,16);
-				g.setColor(new Color(230,180,90)); g.fillRect(ox+25,oy+33,14,4);
-				break;
-			}
-			case PRACA:
-			{
-				Color piso = escurece(e.calcada,0.94);
-				g.setColor(piso); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,piso,90,8);
-				g.setColor(escurece(piso,0.85));
-				for(int k=0;k<=T;k+=21){ g.drawLine(ox+k,oy,ox+k,oy+T); g.drawLine(ox,oy+k,ox+T,oy+k);}
-				g.setColor(e.arbusto); g.fillOval(ox+22,oy+22,20,20); break;
-			}
-			case TELHADO_TOPO:
-			{
-				Color base = e.telhado[1];
-				g.setColor(base); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,base,120,10);
-				g.setColor(escurece(base,0.75)); g.fillOval(ox+14,oy+14,36,36);
-				g.setColor(new Color(235,235,235)); g.setStroke(new BasicStroke(3));
-				g.drawOval(ox+16,oy+16,32,32); g.drawLine(ox+24,oy+24,ox+40,oy+40); g.drawLine(ox+40,oy+24,ox+24,oy+40);
-				g.setStroke(new BasicStroke(1)); break;
-			}
-			default:
-			{
-				Color te=new Color(146,118,82); g.setColor(te); g.fillRect(ox,oy,T,T); ruido(g,ox,oy,te,200,14); break;
-			}
-			}
+			desenhaTile(g, i, (i%COLS)*T, (i/COLS)*T, e);
 		}
 		g.dispose();
-		return sheet;
+		return folha;
 	}
 
 	// ---------------- mapas ----------------
@@ -313,12 +551,18 @@ public class GenCityPack
 
 			int alturaBloco=1+r.nextInt(5);
 			int telhado = new int[]{TELHADO_A,TELHADO_B,TELHADO_C}[r.nextInt(3)];
-			if (r.nextInt(9)==0){ alturaBloco=4+r.nextInt(2); telhado=TELHADO_TOPO; }
+			//O heliponto e uma peca so, no meio da cobertura. Aplicado ao
+			//quarteirao inteiro viraria um tabuleiro de helipontos.
+			boolean comHeliponto = (r.nextInt(9)==0);
+			if (comHeliponto) alturaBloco = 4+r.nextInt(2);
+			int heliX = bx + (passo-3)/2, heliY = by + (passo-3)/2;
 
 			for(int y=by;y<by+passo-3&&y<=y1;y++) for(int x=bx;x<bx+passo-3&&x<=x1;x++)
 			{
 				if(!dentro(x,y)||dist[y][x]<margem) continue;
-				if(tipo==0){ chao[y][x]=telhado; altura[y][x]=alturaBloco; }
+				if(tipo==0){
+					chao[y][x] = (comHeliponto && x==heliX && y==heliY) ? TELHADO_TOPO : telhado;
+					altura[y][x]=alturaBloco; }
 				else if(tipo==1){ chao[y][x]= (r.nextInt(3)==0)?ARBUSTO:GRAMA; }
 				else if(tipo==2){ chao[y][x]=ESTACIONAMENTO; }
 				else if(tipo==3){ chao[y][x]=PRACA; }
