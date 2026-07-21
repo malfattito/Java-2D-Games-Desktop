@@ -1,7 +1,7 @@
 /***********************************************************************
-*Name: JGVHLayer
-*Description: tile layer in the usual vertical/horizontal projection: the
-*             blocks form a rectangular grid aligned with the screen
+*Name: JGOrthoLayer
+*Description: tile layer in orthogonal projection: the blocks form a
+*             rectangular grid aligned with the screen
 *Author: Silvano Malfatti
 *Date: 01/05/20
 ************************************************************************/
@@ -9,26 +9,26 @@
 //Package declaration
 package JGames2D;
 
-public class JGVHLayer extends JGLayer
+public class JGOrthoLayer extends JGLayer
 {
 	/***********************************************************
-	*Name: JGVHLayer
+	*Name: JGOrthoLayer
 	*Description: constructor
 	*Parameters: JGEngine, JGVector2D
 	*Return: none
 	************************************************************/
-	public JGVHLayer(JGEngine manager, JGVector2D blockSize)
+	public JGOrthoLayer(JGEngine manager, JGVector2D blockSize)
 	{
 		super(manager, blockSize);
 	}
 
 	/***********************************************************
-	*Name: JGVHLayer
+	*Name: JGOrthoLayer
 	*Description: constructor
 	*Parameters: JGEngine, JGVector2D, JGVector2D
 	*Return: none
 	************************************************************/
-	public JGVHLayer(JGEngine manager, JGVector2D layerSize, JGVector2D blockSize)
+	public JGOrthoLayer(JGEngine manager, JGVector2D layerSize, JGVector2D blockSize)
 	{
 		super(manager, layerSize, blockSize);
 	}

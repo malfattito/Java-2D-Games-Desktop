@@ -107,16 +107,16 @@ public abstract class JGLevel
 	}
 	
 	/***********************************************************
-	*Name: createVHLayer()
+	*Name: createOrthoLayer()
 	*Description: create a vertical/horizontal layer from a color image
 	*Parameters: JGVector2D, boolean
 	*Return: JGLayer
 	************************************************************/
-	public JGVHLayer createVHLayer(URL tileImage, URL layerImage, JGColorIndex[] colors, JGVector2D blockSize, boolean autoRender)
+	public JGOrthoLayer createOrthoLayer(URL tileImage, URL layerImage, JGColorIndex[] colors, JGVector2D blockSize, boolean autoRender)
 	{
-		JGVHLayer layer = new JGVHLayer(gameManager, blockSize);
+		JGOrthoLayer layer = new JGOrthoLayer(gameManager, blockSize);
 
-		return (JGVHLayer)buildLayer(layer, tileImage, layerImage, colors, autoRender);
+		return (JGOrthoLayer)buildLayer(layer, tileImage, layerImage, colors, autoRender);
 	}
 
 	/***********************************************************
@@ -152,14 +152,14 @@ public abstract class JGLevel
 	}
 	
 	/***********************************************************
-	*Name: createVHLayer()
+	*Name: createOrthoLayer()
 	*Description: create a vertical/horizontal layer from a color image
 	*Parameters: JGVector2D, JGVector2D, boolean
 	*Return: None
 	************************************************************/
-	public JGVHLayer createVHLayer(URL tileImage, JGVector2D layerSize, JGVector2D blockSize, boolean autoRender)
+	public JGOrthoLayer createOrthoLayer(URL tileImage, JGVector2D layerSize, JGVector2D blockSize, boolean autoRender)
 	{
-		JGVHLayer layer = new JGVHLayer(gameManager, layerSize, blockSize);
+		JGOrthoLayer layer = new JGOrthoLayer(gameManager, layerSize, blockSize);
 		layer.setTileImage(tileImage);
 
 		layer.setAutoRender(autoRender);
