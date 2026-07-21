@@ -1,6 +1,6 @@
 /***********************************************************************
 *Name: JGSoundManager
-*Description: represents the animation sequence of image frames
+*Description: singleton that caches the sounds and musics of the game
 *Author: Silvano Malfatti
 *Date: 01/05/20
 ************************************************************************/

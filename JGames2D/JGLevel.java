@@ -117,7 +117,7 @@ public abstract class JGLevel
 		JGLayer layer = new JGLayer(gameManager, blockSize);
 		
 		layer.setTileImage(tileImage);
-		layer.setIndiceCores(colors);
+		layer.setColorIndex(colors);
 		layer.createLayer(layerImage);
 
 		layer.setAutoRender(autoRender);

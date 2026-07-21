@@ -8,10 +8,10 @@ JGames2D is a small, self-contained 2D game engine written in plain Java (AWT/Sw
 
 ## Build & Run
 
-Compile everything (source files use ISO-8859-1 — Portuguese comments contain accented chars):
+Compile everything (all sources are UTF-8; pass the flag explicitly so the build does not depend on the platform's default charset):
 
 ```bash
-javac -encoding ISO-8859-1 -cp "Libs/*" -d out JGames2D/*.java *.java
+javac -encoding UTF-8 -cp "Libs/*" -d out JGames2D/*.java *.java
 ```
 
 Run — the classpath must include the repo root so `Images/` and `Sounds/` resolve as classpath resources:

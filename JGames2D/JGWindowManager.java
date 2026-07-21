@@ -31,7 +31,7 @@ public class JGWindowManager extends JFrame
 
 	//Class Attributes
 	private int xPos, yPos;
-	private int colorsByPixell;
+	private int colorDepth;
 	private String windowTitle = null;
 	private boolean fullScreen;
 	private GraphicsDevice graphDevice = null;
@@ -57,7 +57,7 @@ public class JGWindowManager extends JFrame
 		graphDevice = null;
 		width = 800;
 		height = 600;
-		colorsByPixell = 32;
+		colorDepth = 32;
 		fullScreen = false;
 		xPos = 0;
 		yPos = 0;
@@ -128,7 +128,7 @@ public class JGWindowManager extends JFrame
 	}
 	
 	/***********************************************************
-	*Name: setBackgroundColor
+	*Name: getFullScreen
 	*Description: returns the fullscreen mode
 	*Parameters:None
 	*Return: boolean
@@ -150,7 +150,7 @@ public class JGWindowManager extends JFrame
 	}
 	
 	/***********************************************************
-	*Name: geBackBuffer
+	*Name: getBackBufferImage
 	*Description: returns the backbuffer
 	*Parameters:None
 	*Return: BufferedImage
@@ -204,7 +204,7 @@ public class JGWindowManager extends JFrame
 	{
 		this.width = width;
 		this.height = height;
-		colorsByPixell = depth;
+		colorDepth = depth;
 		createBackBuffer();
 	}
 
@@ -293,7 +293,7 @@ public class JGWindowManager extends JFrame
 		//A janela precisa ser focavel para receber os eventos de teclado
 		setFocusable(true);
 
-		/*Trata o bot�o fechar no caso de modo janela*/
+		/*Trata o botão fechar no caso de modo janela*/
 		addWindowListener(new WindowAdapter() 
 		{
 			public void windowClosing(WindowEvent e)
@@ -322,7 +322,7 @@ public class JGWindowManager extends JFrame
 			GraphicsEnvironment environment = GraphicsEnvironment.getLocalGraphicsEnvironment();
 			graphDevice = environment.getDefaultScreenDevice();
 
-			colorsByPixell = graphDevice.getDisplayMode().getBitDepth();
+			colorDepth = graphDevice.getDisplayMode().getBitDepth();
 
 			if (isNativeFullScreenAvailable())
 			{
@@ -458,7 +458,7 @@ public class JGWindowManager extends JFrame
 	
 	/***********************************************************
 	*Name: paint()
-	*Description: m�todo da classe JFrame que repinta a janela
+	*Description: método da classe JFrame que repinta a janela
 	*Parametros: Graphics2D
 	*
 	*

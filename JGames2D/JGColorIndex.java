@@ -1,6 +1,6 @@
 /***********************************************************************
 *Name: JGColorIndex
-*Description: represents a frame that will compose one animation sequence
+*Description: associates a color of the index image with a tile frame
 *Author: Silvano Malfatti
 *Date: 01/05/20
 ************************************************************************/

@@ -1,7 +1,7 @@
 /***********************************************************************
 *Name: JGImageManager
-*Description: singleton class that controls the processo of load a image 
-*             or returns your reference
+*Description: singleton class that loads an image or returns a reference
+*             to a copy already in memory
 *Author: Silvano Malfatti
 *Date: 01/05/20
 ************************************************************************/

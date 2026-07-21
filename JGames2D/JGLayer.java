@@ -1,12 +1,12 @@
 /***********************************************************************
-*Name: JGAnimation
-*Description: represents the animation sequence of image frames
+*Name: JGLayer
+*Description: represents a tile layer built from a tileset
 *Author: Silvano Malfatti
 *Date: 01/05/20
 ************************************************************************/
 
 
-//Package declarationn
+//Package declaration
 package JGames2D;
 
 //Used Packages
@@ -56,18 +56,18 @@ public class JGLayer
 	*Parameters: JGGameManager, JGVector2D, JGVector2D
 	*Return: none
 	************************************************************/
-	public JGLayer(JGEngine manager, JGVector2D pTamanhoCamada, JGVector2D pTamanhoBloco)
+	public JGLayer(JGEngine manager, JGVector2D layerSize, JGVector2D blockSize)
 	{
 		gameManager = manager;
-		layerSize = pTamanhoCamada;
+		this.layerSize = layerSize;
 		vetColorIndex = null;
 		tileImage = null;
-		vetBlocks = new JGFrameIndex[(int)(pTamanhoCamada.getX() * pTamanhoCamada.getY())];
+		vetBlocks = new JGFrameIndex[(int)(layerSize.getX() * layerSize.getY())];
 		for (int iIndex=0; iIndex<vetBlocks.length; iIndex++)
 		{
 			vetBlocks[iIndex] = new JGFrameIndex();
 		}
-		blockSize = pTamanhoBloco;
+		this.blockSize = blockSize;
 		speed = new JGVector2D();
 		offset = new JGVector2D();
 		visible = true;
@@ -75,14 +75,14 @@ public class JGLayer
 	}
 	
 	/***********************************************************
-	*Name: setVetColorIndex
+	*Name: setColorIndex
 	*Description: defines the color index to create the layer
 	*Parameters: JGColorIndex[]
 	*Return: none
 	************************************************************/
-	public void setIndiceCores(JGColorIndex[] pIndicesCores)
+	public void setColorIndex(JGColorIndex[] colorIndex)
 	{
-		vetColorIndex = pIndicesCores;
+		vetColorIndex = colorIndex;
 	}
 	
 	/***********************************************************
@@ -168,9 +168,9 @@ public class JGLayer
 	*Parameters: boolean
 	*Return: void
 	************************************************************/
-	public void setVisible(boolean pVisivel)
+	public void setVisible(boolean visible)
 	{
-		visible = pVisivel;
+		this.visible = visible;
 	}
 	
 	/***********************************************************
@@ -179,7 +179,7 @@ public class JGLayer
 	*Parameters: none
 	*Return: boolean
 	************************************************************/
-	boolean getVisivel()
+	boolean getVisible()
 	{
 		return visible;
 	}
@@ -267,7 +267,7 @@ public class JGLayer
 
 		if (vetColorIndex == null)
 		{
-			throw new IllegalStateException("JGLayer: chame setIndiceCores() antes de createLayer()");
+			throw new IllegalStateException("JGLayer: chame setColorIndex() antes de createLayer()");
 		}
 
 		BufferedImage pixelImage = indexImage.getImage();
@@ -341,17 +341,17 @@ public class JGLayer
 			return;
 		}
 
-		//Calcula o in�cio da layer em x caso offset seja menor que zero
+		//Calcula o início da layer em x caso offset seja menor que zero
 		if (offsetX > 0)
 		{	
 			int mult = (int)Math.ceil(Math.abs(offsetX) / blockSize.getX());
 			xBlock = ((int)layerSizeX - ((mult % (int)layerSizeX))) == (int)layerSizeX ? 0 : ((int)layerSizeX - ((mult % (int)layerSizeX))); 
 			offsetX -= mult * blockSize.getX();
 		}
-		//Guarda o in�cio do offset e o brick inicial em X
+		//Guarda o início do offset e o brick inicial em X
 		xPosition = offsetX;
 		
-		//Calcula o in�cio da layer em y caso offset seja menor que zero
+		//Calcula o início da layer em y caso offset seja menor que zero
 		if (offsetY > 0)
 		{
 			int mult = (int)Math.ceil(Math.abs(offsetY) / blockSize.getY());
