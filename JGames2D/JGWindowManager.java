@@ -286,9 +286,7 @@ public class JGWindowManager extends JFrame
 		}
 
 		//Esconde o ponteiro do mouse
-		BufferedImage blank = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
-		cursor = Toolkit.getDefaultToolkit().createCustomCursor(blank, new Point(0,0),"invisible");
-		this.setCursor(cursor);
+		hideCursor();
 
 		//A janela precisa ser focavel para receber os eventos de teclado
 		setFocusable(true);
@@ -366,6 +364,35 @@ public class JGWindowManager extends JFrame
 
 		//O foco so pode ser solicitado depois que a janela esta visivel
 		requestFocusInWindow();
+
+		//Reaplica o cursor invisivel: a exibicao e a tela cheia refazem o peer
+		hideCursor();
+	}
+
+	/***********************************************************
+	*Name: hideCursor
+	*Description: puts a fully transparent cursor over the window, which is
+	*             how the system pointer is hidden. Applied to the frame and
+	*             to the content pane, and repeated after the window is shown:
+	*             entering fullscreen rebuilds the peer, and the pointer of
+	*             the system would come back.
+	*Parameters: none
+	*Return: none
+	************************************************************/
+	private void hideCursor()
+	{
+		if (cursor == null)
+		{
+			BufferedImage blank = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+			cursor = Toolkit.getDefaultToolkit().createCustomCursor(blank, new Point(0,0), "invisible");
+		}
+
+		setCursor(cursor);
+
+		if (getContentPane() != null)
+		{
+			getContentPane().setCursor(cursor);
+		}
 	}
 
 	/***********************************************************
