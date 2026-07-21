@@ -37,11 +37,15 @@ public class CenaMenu extends JGLevel
 		click = JGSoundManager.loadSoundEffect(getURL("Sounds/click.wav"));
 		toc = JGSoundManager.loadSoundEffect(getURL("Sounds/toc.wav"));
 		
+		//CENTRO DA AREA DE DESENHO. NAO PODE SER UM VALOR FIXO: A RESOLUCAO
+		//MUDA CONFORME A VERSAO DO JOGO, E O MENU SAIA DO EIXO.
+		int centroX = gameManager.windowManager.getResolutionWidth() / 2;
+
 		//CRIA O SPRITE DE TITULO SETA O ZOOM E POSICAO
 		title = createSprite(getURL("/Images/gametitle.png"), 1, 1);
 		title.zoom.setXY(0.5,0.5);
-		title.position.setXY(400, 96);
-		
+		title.position.setXY(centroX, 96);
+
 		//CRIA O SPRITE DO BOTAO PLAY ADICIONA ANIMACOES, CONFIG ZOOM E POSICAO
 		for (int index=0; index < vetButtons.length; index++)
 		{
@@ -49,7 +53,7 @@ public class CenaMenu extends JGLevel
 			vetButtons[index].addAnimation(1, true, 0);
 			vetButtons[index].addAnimation(1, true, 1);
 			vetButtons[index].zoom.setXY(0.6,0.6);
-			vetButtons[index].position.setXY(400, 180 + 120 * index);
+			vetButtons[index].position.setXY(centroX, 180 + 120 * index);
 		}
 		
 		//CRIA O SPRITE DA MIRA
