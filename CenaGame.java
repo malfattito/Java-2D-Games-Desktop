@@ -148,6 +148,13 @@ public class CenaGame extends JGLevel
 		gameManager.graphics.setColor(Color.yellow);
 		gameManager.graphics.drawString("VIDAS: " + totalVidas, 50, 50);
 		gameManager.graphics.drawString(pontosStr, 650, 50);
+
+		//A MENSAGEM PRECISA SER ESCRITA AQUI: O QUE E DESENHADO EM execute()
+		//E APAGADO PELA LIMPEZA DA TELA ANTES DA CENA SER DESENHADA
+		if (gameOver)
+		{
+			gameManager.graphics.drawString("GAME OVER! - PRESS ENTER...", 200, 300);
+		}
 	}
 	
 	private URL getURL(String image)
@@ -157,11 +164,6 @@ public class CenaGame extends JGLevel
 	
 	private boolean testaGameOver()
 	{
-		if (gameOver == true)
-		{
-			gameManager.graphics.drawString("GAME OVER! - PRESS ENTER...", 200, 300);
-		}
-		
 		return gameOver;
 	}
 	
