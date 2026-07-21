@@ -4,4 +4,5 @@ bin/
 out/
 build/
 *.jar
+*.command
 !Libs/*.jar

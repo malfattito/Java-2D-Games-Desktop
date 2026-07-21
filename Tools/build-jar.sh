@@ -58,6 +58,39 @@ printf 'Main-Class: %s\n' "$PRINCIPAL" > "$BUILD/manifest.txt"
 
 jar cfm "$SAIDA" "$BUILD/manifest.txt" -C "$BUILD/classes" .
 
+echo "==> gerando o lancador para macOS"
+# O macOS marca com quarentena tudo que chega por download, AirDrop ou
+# mensageiro. Ao dar duplo clique num jar marcado, o Gatekeeper recusa com a
+# mensagem enganosa de arquivo danificado, e sem opcao de abrir assim mesmo.
+# Este lancador contorna: como .command ele ainda e barrado, mas com a
+# mensagem de desenvolvedor nao identificado, que aceita clique direito e
+# Abrir. Na primeira execucao ele tira a quarentena de si e do jar, e a
+# partir dai os dois abrem direto.
+LANCADOR="${SAIDA%.jar}.command"
+cat > "$LANCADOR" <<'FIM'
+#!/bin/bash
+cd "$(dirname "$0")" || exit 1
+
+JAR="__JAR__"
+
+# Tira a quarentena, se houver. Sem isso o duplo clique no jar e recusado.
+xattr -d com.apple.quarantine "$0" 2>/dev/null
+xattr -d com.apple.quarantine "$JAR" 2>/dev/null
+
+if ! command -v java >/dev/null 2>&1
+then
+	osascript -e 'display alert "Java nao encontrado" message "Para jogar e preciso ter o Java instalado. Baixe em java.com ou instale um JDK."' >/dev/null 2>&1
+	echo "Java nao encontrado. Instale o Java e tente de novo."
+	read -n 1 -s
+	exit 1
+fi
+
+java -jar "$JAR"
+FIM
+sed -i '' "s|__JAR__|$SAIDA|" "$LANCADOR"
+chmod +x "$LANCADOR"
+
 echo
 echo "pronto: $SAIDA  ($(du -h "$SAIDA" | cut -f1))"
-echo "  executar: java -jar $SAIDA"
+echo "  executar:        java -jar $SAIDA"
+echo "  ou duplo clique: $LANCADOR  (tira a quarentena sozinho)"
