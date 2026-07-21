@@ -179,10 +179,14 @@ public class JGSprite
 		frameWidth = imageWidth / countColunms;
 		frameHeight = imageHeight / countLines;
 
+		//Mantem a transparencia da imagem original: usar BITMASK aqui
+		//destruiria as bordas suavizadas dos sprites
+		int transparency = spriteImage.getTransparency();
+
 		vetQuads = new BufferedImage[countLines * countColunms];
 		for (int iIndex=0; iIndex < vetQuads.length; iIndex++)
 		{
-			vetQuads[iIndex] =  new BufferedImage(frameWidth,frameHeight,BufferedImage.TYPE_4BYTE_ABGR);
+			vetQuads[iIndex] = JGImage.createCompatibleImage(frameWidth, frameHeight, transparency);
 			Graphics2D graphics = vetQuads[iIndex].createGraphics();
 			drawFrame(iIndex, 0, 0, graphics);
 			graphics.dispose();
@@ -379,6 +383,13 @@ public class JGSprite
 			return;
 		}
 
+		//Nao adianta enviar para o Java2D o que cai fora da tela: o recorte
+		//custa mais que o teste
+		if (isOffScreen(position))
+		{
+			return;
+		}
+
 		transform.setToIdentity();
 		transform.translate(position.getX(), position.getY());
 		transform.rotate(fAngle);
@@ -388,6 +399,37 @@ public class JGSprite
 		transform.translate(-frameWidth / 2.0, -frameHeight / 2.0);
 
 		gameManager.graphics.drawImage(vetQuads[getRenderFrameIndex()], transform, null);
+	}
+
+	/***********************************************************
+	*Name:isOffScreen
+	*Description: tells if the sprite falls completely outside the drawing
+	*             area, and therefore does not need to be drawn
+	*Parameters: JGVector2D
+	*Return: boolean
+	************************************************************/
+	private boolean isOffScreen(JGVector2D position)
+	{
+		if (gameManager == null || gameManager.windowManager == null)
+		{
+			return false;
+		}
+
+		double halfWidth = Math.abs(frameWidth * zoom.getX()) / 2.0;
+		double halfHeight = Math.abs(frameHeight * zoom.getY()) / 2.0;
+
+		//Girado, o sprite ocupa ate a propria diagonal em cada eixo
+		if (fAngle != 0.0f)
+		{
+			double radius = Math.sqrt(halfWidth * halfWidth + halfHeight * halfHeight);
+			halfWidth = radius;
+			halfHeight = radius;
+		}
+
+		return (position.getX() + halfWidth < 0) ||
+			   (position.getY() + halfHeight < 0) ||
+			   (position.getX() - halfWidth > gameManager.windowManager.getResolutionWidth()) ||
+			   (position.getY() - halfHeight > gameManager.windowManager.getResolutionHeight());
 	}
 
 	/***********************************************************
@@ -433,7 +475,21 @@ public class JGSprite
 	************************************************************/
 	public boolean collide(JGSprite sprite)
 	{
-		return getRectangle().intersects(sprite.getRectangle());
+		if (sprite == null)
+		{
+			return false;
+		}
+
+		//Testa a sobreposicao direto nas coordenadas. Passar por getRectangle()
+		//alocaria dois Rectangle a cada par testado, e um jogo compara todos
+		//os tiros contra todos os inimigos a cada quadro.
+		double halfWidth = Math.abs(frameWidth * zoom.getX()) / 2.0;
+		double halfHeight = Math.abs(frameHeight * zoom.getY()) / 2.0;
+		double otherHalfWidth = Math.abs(sprite.frameWidth * sprite.zoom.getX()) / 2.0;
+		double otherHalfHeight = Math.abs(sprite.frameHeight * sprite.zoom.getY()) / 2.0;
+
+		return Math.abs(position.getX() - sprite.position.getX()) < (halfWidth + otherHalfWidth) &&
+			   Math.abs(position.getY() - sprite.position.getY()) < (halfHeight + otherHalfHeight);
 	}
 	
 	/***********************************************************

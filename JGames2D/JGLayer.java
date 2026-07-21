@@ -29,6 +29,7 @@ public class JGLayer
 	private boolean visible = false;
 	private boolean autoRender = false;
 	private int tileColumns = 0;
+	private BufferedImage[] vetTiles = null;
 	
 	/***********************************************************
 	*Name: JGLayer
@@ -206,6 +207,40 @@ public class JGLayer
 
 		//O numero de colunas do tileset nao muda: calcula uma unica vez
 		tileColumns = (int)(tileImage.getImageWidth() / blockSize.getX());
+
+		sliceTiles();
+	}
+
+	/***********************************************************
+	*Name: sliceTiles
+	*Description: cuts the tileset into one image per block, in the format
+	*             the screen uses. Recortar na hora do desenho impedia o
+	*             Java2D de usar a copia direta, e a layer redesenha
+	*             centenas de blocos por quadro.
+	*Parameters: none
+	*Return: none
+	************************************************************/
+	private void sliceTiles()
+	{
+		int blockWidth = (int)blockSize.getX();
+		int blockHeight = (int)blockSize.getY();
+		int tileRows = tileImage.getImageHeight() / blockHeight;
+		int transparency = tileImage.getTransparency();
+
+		vetTiles = new BufferedImage[tileColumns * tileRows];
+
+		for (int index = 0; index < vetTiles.length; index++)
+		{
+			int fx = (index % tileColumns) * blockWidth;
+			int fy = (index / tileColumns) * blockHeight;
+
+			vetTiles[index] = JGImage.createCompatibleImage(blockWidth, blockHeight, transparency);
+
+			Graphics2D graphics = vetTiles[index].createGraphics();
+			graphics.drawImage(tileImage.getImage(), 0, 0, blockWidth, blockHeight,
+					                                 fx, fy, fx + blockWidth, fy + blockHeight, null);
+			graphics.dispose();
+		}
 	}
 	
 	/***********************************************************
@@ -239,13 +274,12 @@ public class JGLayer
 	************************************************************/
 	private void drawBlock(int frameIndex, int x, int y, Graphics2D g2d)
 	{
-		int width = (int)blockSize.getX();
-		int height = (int)blockSize.getY();
+		if (frameIndex < 0 || frameIndex >= vetTiles.length)
+		{
+			return;
+		}
 
-		int fx = (frameIndex % tileColumns) * width;
-		int fy = (frameIndex / tileColumns) * height;
-
-		g2d.drawImage(tileImage.getImage() ,x, y, x + width, y + height ,fx, fy, fx + width, fy + height, null);
+		g2d.drawImage(vetTiles[frameIndex], x, y, null);
 	}
 	
 	/***********************************************************
@@ -330,7 +364,7 @@ public class JGLayer
 		double layerSizeY = layerSize.getY();
 
 		//Retorna se a layer nao estiver visivel ou ainda nao tiver blocos
-		if (!visible || vetBlocks == null || tileImage == null)
+		if (!visible || vetBlocks == null || tileImage == null || vetTiles == null)
 		{
 			return;
 		}
@@ -390,6 +424,20 @@ public class JGLayer
 	public void free()
 	{
 		JGImageManager.free(tileImage);
+
+		if (vetTiles != null)
+		{
+			for (int index = 0; index < vetTiles.length; index++)
+			{
+				if (vetTiles[index] != null)
+				{
+					vetTiles[index].flush();
+					vetTiles[index] = null;
+				}
+			}
+			vetTiles = null;
+		}
+
 		gameManager = null;
 		vetBlocks = null;
 		blockSize = null;
