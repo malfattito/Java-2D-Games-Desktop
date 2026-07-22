@@ -17,6 +17,7 @@ public abstract class JGLevel
 	//Class attributes
 	public ArrayList<JGLayer> vetLayers = null;
 	public ArrayList<JGSprite> vetSprites = null;
+	public ArrayList<JGFont> vetTexts = null;
 	protected JGEngine gameManager = null;
 	
 	/***********************************************************
@@ -29,6 +30,7 @@ public abstract class JGLevel
 	{
 		vetLayers = new ArrayList<JGLayer>();
 		vetSprites = new ArrayList<JGSprite>();
+		vetTexts = new ArrayList<JGFont>();
 	}
 	
 	/***********************************************************
@@ -81,6 +83,15 @@ public abstract class JGLevel
 			if (sprite.autoRender)
 			{
 				sprite.render();
+			}
+		}
+
+		//Os textos por ultimo: assim ficam sempre por cima da cena
+		for (JGFont text : vetTexts)
+		{
+			if (text.autoRender)
+			{
+				text.render();
 			}
 		}
 	}
@@ -218,6 +229,22 @@ public abstract class JGLevel
 	}
 	
 	/***********************************************************
+	*Name: createFont
+	*Description: create a text object of the level, rendered over
+	*             everything else
+	*Parameters: String, int, int
+	*Return: JGFont
+	************************************************************/
+	public JGFont createFont(String family, int style, int size)
+	{
+		JGFont text = new JGFont(gameManager, family, style, size);
+
+		vetTexts.add(text);
+
+		return text;
+	}
+
+	/***********************************************************
 	*Name: free
 	*Description: free resources
 	*Parameters: none
@@ -238,5 +265,12 @@ public abstract class JGLevel
 			layer.free();
 		}
 		vetLayers.clear();
+
+		//Libera os textos
+		for (JGFont text : vetTexts)
+		{
+			text.free();
+		}
+		vetTexts.clear();
 	}
 }
