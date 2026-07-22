@@ -6,3 +6,4 @@ build/
 *.jar
 *.command
 !Libs/*.jar
+__pycache__/
