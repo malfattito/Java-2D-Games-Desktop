@@ -15,6 +15,7 @@ package JGames2D;
 
 //Used Packages
 import java.awt.Graphics2D;
+import java.awt.Shape;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.net.URL;
@@ -29,6 +30,7 @@ public class JGTopDownLayer extends JGLayer
 	private HashMap<Integer, Integer> wallByRoof = new HashMap<Integer, Integer>();
 	private double perspective = 0.12;
 	private JGVector2D cameraCenter = null;
+	private final java.awt.geom.Path2D.Double facePath = new java.awt.geom.Path2D.Double();
 	private AffineTransform faceTransform = null;
 
 	//Lista dos predios visiveis, reaproveitada a cada quadro para nao
@@ -519,6 +521,49 @@ public class JGTopDownLayer extends JGLayer
 	*Parameters: int, int, int, double, double, Graphics2D
 	*Return: void
 	************************************************************/
+	private void drawSide(int wallIndex, double firstX, double firstY, double lastX, double lastY,
+	                      int height, int neighbour, double cameraX, double cameraY,
+	                      Graphics2D graphics)
+	{
+		//A face de um andar e um trapezio, e uma transformacao afim so sabe
+		//desenhar paralelogramo. Em vez de escolher onde deixar a folga, a
+		//parede inteira e recortada pelo trapezio de verdade: o que sobra de
+		//cada andar e aparado, e nao sobra dente nenhum na base.
+		double top = 1.0 + perspective * height;
+
+		facePath.reset();
+		facePath.moveTo(cameraX + (firstX - cameraX), cameraY + (firstY - cameraY));
+		facePath.lineTo(cameraX + (lastX - cameraX), cameraY + (lastY - cameraY));
+		facePath.lineTo(cameraX + (lastX - cameraX) * top, cameraY + (lastY - cameraY) * top);
+		facePath.lineTo(cameraX + (firstX - cameraX) * top, cameraY + (firstY - cameraY) * top);
+		facePath.closePath();
+
+		Shape oldClip = graphics.getClip();
+		graphics.clip(facePath);
+
+		for (int floor = 0; floor < height; floor++)
+		{
+			//A face encostada num vizinho da mesma altura e uma parede
+			//interna: desenha-la faria um predio largo parecer varias caixas
+			if (neighbour > floor)
+			{
+				continue;
+			}
+
+			drawWall(wallIndex, firstX, firstY, lastX, lastY,
+			         1.0 + perspective * floor, 1.0 + perspective * (floor + 1),
+			         cameraX, cameraY, graphics);
+		}
+
+		graphics.setClip(oldClip);
+	}
+
+	/***********************************************************
+	*Name: drawBuilding
+	*Description: draws the walls that face the camera and then the roof
+	*Parameters: int, int, int, double, double, Graphics2D
+	*Return: void
+	************************************************************/
 	private void drawBuilding(int column, int line, int height,
 	                          double cameraX, double cameraY, Graphics2D graphics)
 	{
@@ -543,38 +588,26 @@ public class JGTopDownLayer extends JGLayer
 		boolean showsWest = x + blockWidth / 2.0 > cameraX;
 		boolean showsNorth = y + blockHeight / 2.0 > cameraY;
 
-		for (int floor = 0; floor < height; floor++)
+		if (showsWest)
 		{
-			double lower = 1.0 + perspective * floor;
-			double upper = 1.0 + perspective * (floor + 1);
+			drawSide(wallIndex, x, y, x, y + blockHeight,
+			         height, (int)westHeight, cameraX, cameraY, graphics);
+		}
+		else
+		{
+			drawSide(wallIndex, x + blockWidth, y, x + blockWidth, y + blockHeight,
+			         height, (int)eastHeight, cameraX, cameraY, graphics);
+		}
 
-			if (showsWest)
-			{
-				if (westHeight <= floor)
-				{
-					drawWall(wallIndex, x, y, x, y + blockHeight,
-					         lower, upper, cameraX, cameraY, graphics);
-				}
-			}
-			else if (eastHeight <= floor)
-			{
-				drawWall(wallIndex, x + blockWidth, y, x + blockWidth, y + blockHeight,
-				         lower, upper, cameraX, cameraY, graphics);
-			}
-
-			if (showsNorth)
-			{
-				if (northHeight <= floor)
-				{
-					drawWall(wallIndex, x, y, x + blockWidth, y,
-					         lower, upper, cameraX, cameraY, graphics);
-				}
-			}
-			else if (southHeight <= floor)
-			{
-				drawWall(wallIndex, x, y + blockHeight, x + blockWidth, y + blockHeight,
-				         lower, upper, cameraX, cameraY, graphics);
-			}
+		if (showsNorth)
+		{
+			drawSide(wallIndex, x, y, x + blockWidth, y,
+			         height, (int)northHeight, cameraX, cameraY, graphics);
+		}
+		else
+		{
+			drawSide(wallIndex, x, y + blockHeight, x + blockWidth, y + blockHeight,
+			         height, (int)southHeight, cameraX, cameraY, graphics);
 		}
 
 		//O telhado usa o tile que a celula tem no mapa, ampliado pela altura
