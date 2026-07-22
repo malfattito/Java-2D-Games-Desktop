@@ -68,6 +68,40 @@ public class JGSoundManager
 	}
 	
 	/***********************************************************
+	*Name: loadTrack
+	*Description: load a long sound meant to be looped, like the music of a
+	*             scene. It is the same object as an effect, but with a
+	*             single copy: a track never overlaps itself, and six copies
+	*             of a whole song would sit in memory for nothing. Looping
+	*             here is sample exact, which is what JGMusic cannot do,
+	*             since it reopens the stream to start again.
+	*Parameters: URL
+	*Return: JGSoundEffect
+	************************************************************/
+	public static JGSoundEffect loadTrack(URL pName)
+	{
+		if (pName == null)
+		{
+			return new JGSoundEffect(null);
+		}
+
+		//A file is a track or an effect, never both: whoever asks first
+		//decides how many copies it has
+		for (JGSoundEffect sound : vetSoundEffects)
+		{
+			if (pName.getPath().equals(sound.getSoundName()))
+			{
+				return sound;
+			}
+		}
+
+		JGSoundEffect track = new JGSoundEffect(pName, JGSoundEffect.SINGLE_VOICE);
+		vetSoundEffects.add(track);
+
+		return track;
+	}
+
+	/***********************************************************
 	*Name: loadMusic
 	*Description: load a music or reclycle your reference
 	*Parameters: URL

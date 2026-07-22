@@ -24,6 +24,10 @@ public class JGSoundEffect
 	//disparo usa uma das copias, em vez de cortar o som anterior
 	private static final int VOICES = 6;
 
+	//Uma trilha nao se sobrepoe a si mesma e costuma ser longa: seis copias
+	//dela seriam seis vezes o arquivo inteiro na memoria sem serventia
+	static final int SINGLE_VOICE = 1;
+
 	//Class Attributes
 	private Clip[] clips = null;
 	private int nextClip = 0;
@@ -37,6 +41,18 @@ public class JGSoundEffect
 	*Return: None
 	************************************************************/
 	JGSoundEffect(URL file)
+	{
+		this(file, VOICES);
+	}
+
+	/***********************************************************
+	*Name: JGSoundEffect
+	*Description: constructor of a sound object with a given number of
+	*             copies sounding at the same time
+	*Parameters: URL, int
+	*Return: None
+	************************************************************/
+	JGSoundEffect(URL file, int voices)
 	{
 		if (file == null)
 		{
@@ -59,7 +75,7 @@ public class JGSoundEffect
 			byte[] data = readAll(source);
 			source.close();
 
-			clips = new Clip[VOICES];
+			clips = new Clip[Math.max(1, voices)];
 			for (int index = 0; index < clips.length; index++)
 			{
 				clips[index] = AudioSystem.getClip();
