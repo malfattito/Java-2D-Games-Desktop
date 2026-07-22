@@ -22,6 +22,18 @@ java -cp "out:.:Libs/*" GamePrincipal
 
 There are no tests, no linter, and no CI.
 
+## The manual
+
+`Docs/JGames2D-Manual.pdf` is an illustrated manual of the engine, in Portuguese, written for someone learning it. Every figure in it is rendered **by the engine itself** — `Tools/FigureMaker.java` boots `JGEngine` offscreen, draws sprites, animations, the three layers, collision boxes and `JGFont`, and dumps the back buffer. To rebuild:
+
+```bash
+javac -encoding UTF-8 -cp "Libs/*" -d /tmp/fig JGames2D/*.java Tools/FigureMaker.java
+java -cp "/tmp/fig:.:Libs/*" FigureMaker /tmp/figuras
+python3 Tools/GenManual.py /tmp/figuras Docs/JGames2D-Manual.pdf
+```
+
+`Tools/pdfkit.py` is a minimal PDF writer (text in the standard 14 fonts, rectangles, lines, circles, JPEG images) — no library to install, the same rule the engine follows. `ffmpeg` converts the figures to JPEG, which is what a PDF embeds directly.
+
 ## Architecture
 
 **Two layers:** `JGames2D/` is the reusable engine package; the `Cena*.java` + `GamePrincipal.java` files in the repo root are the sample game and live in the default package.
