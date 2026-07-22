@@ -349,9 +349,16 @@ public class JGTopDownLayer extends JGLayer
 					continue;
 				}
 
-				drawBlock(vetBlocks[blockIndex].getFrameIndex(),
-				          (int)(offset.getX() + column * blockWidth),
-				          (int)(offset.getY() + line * blockHeight), graphics);
+				//Ate onde comeca o vizinho, e nao um bloco de tamanho fixo: o
+				//offset anda em fracoes de pixel, e dois vizinhos truncados
+				//cada um por si deixam entre eles uma linha nao pintada.
+				int blockX = (int)(offset.getX() + column * blockWidth);
+				int blockY = (int)(offset.getY() + line * blockHeight);
+				int nextX = (int)(offset.getX() + (column + 1) * blockWidth);
+				int nextY = (int)(offset.getY() + (line + 1) * blockHeight);
+
+				drawBlock(vetBlocks[blockIndex].getFrameIndex(), blockX, blockY,
+				          nextX - blockX, nextY - blockY, graphics);
 			}
 		}
 

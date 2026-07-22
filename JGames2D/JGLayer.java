@@ -388,6 +388,27 @@ public abstract class JGLayer
 	}
 
 	/***********************************************************
+	*Name: drawBlock
+	*Description: draws one block stretched to a given size. A layer that
+	*             scrolls by fractions of a pixel cannot place two neighbours
+	*             by truncating each origin on its own: one lands at 96 and
+	*             the next at 193, and the row of pixels between them is not
+	*             painted by either. Drawing each block up to where the next
+	*             one starts closes that seam.
+	*Parameters: int, int, int, int, int, Graphics2D
+	*Return: void
+	************************************************************/
+	protected void drawBlock(int frameIndex, int x, int y, int width, int height, Graphics2D g2d)
+	{
+		if (frameIndex < 0 || frameIndex >= vetTiles.length)
+		{
+			return;
+		}
+
+		g2d.drawImage(vetTiles[frameIndex], x, y, width, height, null);
+	}
+
+	/***********************************************************
 	*Name: isReadyToRender
 	*Description: tells if the layer has everything it needs to be drawn
 	*Parameters: none
