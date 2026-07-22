@@ -166,6 +166,12 @@ public class JGSoundEffect
 			return;
 		}
 
+		//Rewinding is not enough: the line still holds what the previous
+		//reproduction gave it, and the beginning of the new one goes out
+		//underneath that leftover, which is heard as a piece missing
+		clip.stop();
+		clip.flush();
+
 		clip.setFramePosition(0);
 		applyVolume(clip);
 		clip.start();
@@ -173,8 +179,8 @@ public class JGSoundEffect
 
 	/***********************************************************
 	*Name: takeFreeClip
-	*Description: returns a copy that is not sounding. If every copy is busy,
-	*             recycles the oldest one.
+	*Description: returns the next copy that is not sounding, going round
+	*             the voices. If every copy is busy, recycles the oldest one.
 	*Parameters: None
 	*Return: Clip
 	************************************************************/
@@ -185,17 +191,25 @@ public class JGSoundEffect
 			return null;
 		}
 
-		for (int index = 0; index < clips.length; index++)
+		//Goes round instead of always handing back the first copy. A copy
+		//that has just finished is still emptying itself into the sound
+		//card, and taking it again straight away is what costs the start of
+		//the next reproduction. Going round gives it the whole turn to drain.
+		for (int step = 0; step < clips.length; step++)
 		{
+			int index = (nextClip + step) % clips.length;
+
 			if (!clips[index].isRunning())
 			{
+				nextClip = (index + 1) % clips.length;
+
 				return clips[index];
 			}
 		}
 
+		//Every copy is busy: the one that started longest ago gives way
 		Clip oldest = clips[nextClip];
 		nextClip = (nextClip + 1) % clips.length;
-		oldest.stop();
 
 		return oldest;
 	}
