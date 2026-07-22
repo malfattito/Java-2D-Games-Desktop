@@ -529,60 +529,120 @@ public class JGTopDownLayer extends JGLayer
 		double x = offset.getX() + column * blockWidth;
 		double y = offset.getY() + line * blockHeight;
 
-		//Deslocamento de um andar: cresce com a distancia ate a camera
-		double stepX = ((x + blockWidth / 2.0) - cameraX) * perspective;
-		double stepY = ((y + blockHeight / 2.0) - cameraY) * perspective;
+		//Subir um andar afasta o bloco da camera. Isso e uma ampliacao em
+		//torno dela, e nao um empurrao: o que sobe tambem cresce na tela.
+		//Desenhar o topo do mesmo tamanho da base abriria, entre duas
+		//celulas vizinhas de um mesmo predio, um vao do tamanho do quanto
+		//elas se afastaram - e e por esse vao que se via o chao.
+		double westHeight = getHeightByCell(column - 1, line);
+		double eastHeight = getHeightByCell(column + 1, line);
+		double northHeight = getHeightByCell(column, line - 1);
+		double southHeight = getHeightByCell(column, line + 1);
 
-		//A face encostada num vizinho da mesma altura e uma parede interna:
-		//desenha-la faria um predio largo parecer varias caixas encostadas.
-		//Por andar, porque um vizinho mais baixo so esconde os primeiros.
-		int westHeight = getHeightByCell(column - 1, line);
-		int eastHeight = getHeightByCell(column + 1, line);
-		int northHeight = getHeightByCell(column, line - 1);
-		int southHeight = getHeightByCell(column, line + 1);
+		//De que lado a camera esta, para saber quais faces ela ve
+		boolean showsWest = x + blockWidth / 2.0 > cameraX;
+		boolean showsNorth = y + blockHeight / 2.0 > cameraY;
 
-		//As paredes visiveis sao as viradas para a camera
 		for (int floor = 0; floor < height; floor++)
 		{
-			double baseX = x + stepX * floor;
-			double baseY = y + stepY * floor;
+			double lower = 1.0 + perspective * floor;
+			double upper = 1.0 + perspective * (floor + 1);
 
-			if (stepX > 0)
+			if (showsWest)
 			{
 				if (westHeight <= floor)
 				{
-					drawFace(wallIndex, baseX, baseY, 0, blockHeight, stepX, stepY, graphics);
+					drawWall(wallIndex, x, y, x, y + blockHeight,
+					         lower, upper, cameraX, cameraY, graphics);
 				}
 			}
-			else if (stepX < 0)
+			else if (eastHeight <= floor)
 			{
-				if (eastHeight <= floor)
-				{
-					drawFace(wallIndex, baseX + blockWidth, baseY, 0, blockHeight, stepX, stepY, graphics);
-				}
+				drawWall(wallIndex, x + blockWidth, y, x + blockWidth, y + blockHeight,
+				         lower, upper, cameraX, cameraY, graphics);
 			}
 
-			if (stepY > 0)
+			if (showsNorth)
 			{
 				if (northHeight <= floor)
 				{
-					drawFace(wallIndex, baseX, baseY, blockWidth, 0, stepX, stepY, graphics);
+					drawWall(wallIndex, x, y, x + blockWidth, y,
+					         lower, upper, cameraX, cameraY, graphics);
 				}
 			}
-			else if (stepY < 0)
+			else if (southHeight <= floor)
 			{
-				if (southHeight <= floor)
-				{
-					drawFace(wallIndex, baseX, baseY + blockHeight, blockWidth, 0, stepX, stepY, graphics);
-				}
+				drawWall(wallIndex, x, y + blockHeight, x + blockWidth, y + blockHeight,
+				         lower, upper, cameraX, cameraY, graphics);
 			}
 		}
 
-		//O telhado usa o tile que a celula tem no mapa
+		//O telhado usa o tile que a celula tem no mapa, ampliado pela altura
+		//inteira: assim ele encosta no telhado do vizinho, sem vao no meio
 		if (roofIndex >= 0)
 		{
-			drawBlock(roofIndex, (int)(x + stepX * height), (int)(y + stepY * height), graphics);
+			double scale = 1.0 + perspective * height;
+
+			drawScaled(roofIndex,
+			           cameraX + (x - cameraX) * scale,
+			           cameraY + (y - cameraY) * scale,
+			           blockWidth * scale, blockHeight * scale, graphics);
 		}
+	}
+
+	/***********************************************************
+	*Name: drawWall
+	*Description: uma face entre dois andares. A aresta da base e a mesma da
+	*             ponta, cada uma na sua ampliacao, e o tile e esticado entre
+	*             as duas.
+	*Parameters: int, double, double, double, double, double, double, double, double, Graphics2D
+	*Return: void
+	************************************************************/
+	private void drawWall(int wallIndex, double firstX, double firstY, double lastX, double lastY,
+	                      double lower, double upper, double cameraX, double cameraY,
+	                      Graphics2D graphics)
+	{
+		//A face de verdade e um trapezio: a aresta de cima e mais longa que a
+		//de baixo, porque subir afasta. Um desenho com transformacao afim so
+		//sabe fazer paralelogramo, entao a escolha e onde por a folga.
+		//
+		//Ela vai para baixo. A aresta de cima fecha exata com a do andar
+		//seguinte e com o telhado, que e onde um vao apareceria como buraco
+		//no predio; embaixo, o que sobra cobre o vizinho, e cobrir e bem
+		//menos visivel que vazar.
+		double baseFirstX = cameraX + (firstX - cameraX) * lower;
+		double baseFirstY = cameraY + (firstY - cameraY) * lower;
+
+		double topFirstX = cameraX + (firstX - cameraX) * upper;
+		double topFirstY = cameraY + (firstY - cameraY) * upper;
+		double topLastX = cameraX + (lastX - cameraX) * upper;
+		double topLastY = cameraY + (lastY - cameraY) * upper;
+
+		drawFace(wallIndex, baseFirstX, baseFirstY,
+		         topLastX - topFirstX, topLastY - topFirstY,
+		         topFirstX - baseFirstX, topFirstY - baseFirstY, graphics);
+	}
+
+	/***********************************************************
+	*Name: drawScaled
+	*Description: desenha um tile esticado num retangulo qualquer
+	*Parameters: int, double, double, double, double, Graphics2D
+	*Return: void
+	************************************************************/
+	private void drawScaled(int frameIndex, double x, double y, double width, double height,
+	                        Graphics2D graphics)
+	{
+		if (frameIndex < 0 || vetTiles == null || frameIndex >= vetTiles.length
+			|| vetTiles[frameIndex] == null)
+		{
+			return;
+		}
+
+		BufferedImage tile = vetTiles[frameIndex];
+
+		faceTransform.setTransform(width / tile.getWidth(), 0, 0, height / tile.getHeight(), x, y);
+
+		graphics.drawImage(tile, faceTransform, null);
 	}
 
 	/***********************************************************
