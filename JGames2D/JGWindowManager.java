@@ -343,10 +343,13 @@ public class JGWindowManager extends JFrame
 			}
 			else
 			{
-				//Demais sistemas: janela sem bordas ocupando a area util do
-				//monitor. Ocupar o monitor inteiro deixaria a barra de tarefas
-				//por cima do conteudo desenhado junto as bordas.
-				Rectangle screenArea = environment.getMaximumWindowBounds();
+				//Demais sistemas: janela sem bordas cobrindo o monitor
+				//inteiro. E os limites do monitor, e nao a area util
+				//(getMaximumWindowBounds), que exclui a barra de tarefas: uma
+				//janela do tamanho da area util deixa a faixa da barra de fora,
+				//e ela continua aparecendo por cima. Sem borda, do tamanho do
+				//monitor e sempre no topo, o Windows recolhe a barra por baixo.
+				Rectangle screenArea = graphDevice.getDefaultConfiguration().getBounds();
 
 				setUndecorated(true);
 				setResizable(false);
@@ -354,6 +357,12 @@ public class JGWindowManager extends JFrame
 				setLocation(screenArea.x, screenArea.y);
 				setAlwaysOnTop(true);
 				setVisible(true);
+
+				//Traz a janela para a frente com foco: sem isso o Windows pode
+				//manter a barra de tarefas por cima de uma janela sem borda que
+				//nasce sem foco.
+				toFront();
+				requestFocus();
 
 				//Aqui o tamanho ja vale: nao ha animacao a esperar
 				displayReady = true;
