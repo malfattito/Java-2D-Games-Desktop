@@ -40,6 +40,15 @@ public class JGTopDownLayer extends JGLayer
 	private double[] vetVisibleKey = new double[256];
 	private int visibleCount = 0;
 
+	//Os atores no chao - personagem, pedestres - que a camada desenha
+	//intercalados com os predios, cada um na sua profundidade, para um predio
+	//da frente encobrir quem esta atras dele em vez de todos ficarem por cima.
+	//A cena passa a lista e marca autoRender falso neles, para o nivel nao os
+	//desenhar de novo por cima de tudo.
+	private java.util.List<JGSprite> actors = null;
+	private double[] actorKey = new double[64];
+	private int[] actorOrder = new int[64];
+
 	/***********************************************************
 	*Name: JGTopDownLayer
 	*Description: constructor
@@ -384,12 +393,120 @@ public class JGTopDownLayer extends JGLayer
 		//pode cobrir um distante, nunca o contrario
 		sortByKey(0, visibleCount - 1);
 
-		for (int index = 0; index < visibleCount; index++)
+		drawBuildingsAndActors(cameraX, cameraY, graphics);
+	}
+
+	/***********************************************************
+	*Name: setActors
+	*Description: define os atores no chao que a camada desenha intercalados
+	*             com os predios pela profundidade. Passar null volta a
+	*             desenhar so os predios.
+	*Parameters: List<JGSprite>
+	*Return: void
+	************************************************************/
+	public void setActors(java.util.List<JGSprite> actors)
+	{
+		this.actors = actors;
+	}
+
+	/***********************************************************
+	*Name: drawBuildingsAndActors
+	*Description: desenha predios e atores numa ordem so, do mais distante da
+	*             camera para o mais proximo. Sem atores, e o laco de sempre;
+	*             com eles, cada ator entra na sua profundidade, entao um
+	*             predio mais proximo o encobre e um mais distante fica atras.
+	*Parameters: double, double, Graphics2D
+	*Return: void
+	************************************************************/
+	private void drawBuildingsAndActors(double cameraX, double cameraY, Graphics2D graphics)
+	{
+		int actorCount = orderActors(cameraX, cameraY);
+
+		int building = 0;
+		int actor = 0;
+
+		//predios ja estao ordenados do mais distante ao mais proximo; os atores
+		//tambem. Avanca sempre o de maior distancia entre os dois topos.
+		while (building < visibleCount || actor < actorCount)
 		{
-			drawBuilding(vetVisibleColumn[index], vetVisibleLine[index],
-			             getHeightByCell(vetVisibleColumn[index], vetVisibleLine[index]),
-			             cameraX, cameraY, graphics);
+			boolean drawActor;
+
+			if (actor >= actorCount)
+			{
+				drawActor = false;
+			}
+			else if (building >= visibleCount)
+			{
+				drawActor = true;
+			}
+			else
+			{
+				drawActor = actorKey[actorOrder[actor]] >= vetVisibleKey[building];
+			}
+
+			if (drawActor)
+			{
+				actors.get(actorOrder[actor]).render();
+				actor++;
+			}
+			else
+			{
+				drawBuilding(vetVisibleColumn[building], vetVisibleLine[building],
+				             getHeightByCell(vetVisibleColumn[building], vetVisibleLine[building]),
+				             cameraX, cameraY, graphics);
+				building++;
+			}
 		}
+	}
+
+	/***********************************************************
+	*Name: orderActors
+	*Description: mede a distancia de cada ator a camera e os poe em ordem, do
+	*             mais distante ao mais proximo, para casar com a ordem dos
+	*             predios. Uma insercao simples: sao poucos atores.
+	*Parameters: double, double
+	*Return: int, quantos atores ha
+	************************************************************/
+	private int orderActors(double cameraX, double cameraY)
+	{
+		if (actors == null)
+		{
+			return 0;
+		}
+
+		int count = actors.size();
+
+		if (count > actorKey.length)
+		{
+			actorKey = new double[count];
+			actorOrder = new int[count];
+		}
+
+		for (int index = 0; index < count; index++)
+		{
+			JGVector2D position = actors.get(index).position;
+			double deltaX = position.getX() - cameraX;
+			double deltaY = position.getY() - cameraY;
+			actorKey[index] = deltaX * deltaX + deltaY * deltaY;
+			actorOrder[index] = index;
+		}
+
+		//ordena os indices por distancia decrescente
+		for (int i = 1; i < count; i++)
+		{
+			int value = actorOrder[i];
+			int j = i - 1;
+
+			while (j >= 0 && actorKey[actorOrder[j]] < actorKey[value])
+			{
+				actorOrder[j + 1] = actorOrder[j];
+				j--;
+			}
+
+			actorOrder[j + 1] = value;
+		}
+
+		return count;
 	}
 
 	/***********************************************************
