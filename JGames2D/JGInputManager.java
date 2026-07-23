@@ -21,11 +21,24 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 {
 	//Class attributes
 	private final int KEYS_NUMBER = 256;
+
+	//Estado continuo, lido agora: verdadeiro enquanto a tecla ou o botao esta
+	//pressionado
 	private boolean[] keyStates = null;
-	private boolean[] keyReleasedStates = null;
-	private JGVector2D mousePosition = null;
 	private boolean mouseState = false;
-	private boolean mouseReleasedState = false;
+
+	//Estado de borda: quantas vezes a tecla ou o botao foi solto. Dois
+	//buffers - o do quadro, que a cena le, e o pendente, que a thread da AWT
+	//preenche. O motor promove o pendente para o do quadro uma vez, no inicio
+	//de cada quadro. Assim um evento que chega no meio do quadro e entregue no
+	//quadro seguinte em vez de ser apagado antes de alguem ler, e dois toques
+	//no mesmo quadro sao contados, e nao fundidos num unico bit.
+	private int[] keyTypedFrame = null;
+	private int[] keyTypedPending = null;
+	private int mouseClickedFrame = 0;
+	private int mouseClickedPending = 0;
+
+	private JGVector2D mousePosition = null;
 	private JGWindowManager windowManager = null;
 
 	//Os eventos chegam pela thread da interface e sao lidos pela thread do jogo
@@ -42,7 +55,8 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 		mousePosition = new JGVector2D();
 
 		keyStates = new boolean[KEYS_NUMBER];
-		keyReleasedStates = new boolean[KEYS_NUMBER];
+		keyTypedFrame = new int[KEYS_NUMBER];
+		keyTypedPending = new int[KEYS_NUMBER];
 
 		if (window instanceof JGWindowManager)
 		{
@@ -105,31 +119,40 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 			for (int index=0; index < keyStates.length; index++)
 			{
 				keyStates[index] = false;
-				keyReleasedStates[index] = false;
+				keyTypedFrame[index] = 0;
+				keyTypedPending[index] = 0;
 			}
 			mouseState = false;
-			mouseReleasedState = false;
+			mouseClickedFrame = 0;
+			mouseClickedPending = 0;
 		}
 	}
 
 	/*******************************************
-   	* Name: endFrame()
-   	* Description: closes the input frame, discarding the events already
-   	*              delivered to the scene. Called once per frame by the engine
-   	*              so that reading an event never consumes it: every object can
-   	*              ask about the same click during the whole frame.
+   	* Name: beginFrame()
+   	* Description: opens the input frame. Promotes the releases the AWT thread
+   	*              gathered since the last frame into the buffer the scene
+   	*              reads, and empties the pending one. Called once by the
+   	*              engine at the start of every frame, before the scene reads:
+   	*              a release that lands after this point waits in the pending
+   	*              buffer and is delivered on the next frame instead of being
+   	*              cleared before anyone sees it. Reading never consumes the
+   	*              event, so every object can ask about the same click during
+   	*              the whole frame.
    	* Parameters: none
    	* Returns: none
    	******************************************/
-	void endFrame()
+	void beginFrame()
 	{
 		synchronized (inputLock)
 		{
-			for (int index=0; index < keyReleasedStates.length; index++)
+			for (int index=0; index < keyTypedFrame.length; index++)
 			{
-				keyReleasedStates[index] = false;
+				keyTypedFrame[index] = keyTypedPending[index];
+				keyTypedPending[index] = 0;
 			}
-			mouseReleasedState = false;
+			mouseClickedFrame = mouseClickedPending;
+			mouseClickedPending = 0;
 		}
 	}
 	
@@ -148,7 +171,7 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 
 		synchronized (inputLock)
 		{
-			return keyReleasedStates[keyCode];
+			return keyTypedFrame[keyCode] > 0;
 		}
 	}
 	
@@ -162,7 +185,7 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	{
 		synchronized (inputLock)
 		{
-			return mouseReleasedState;
+			return mouseClickedFrame > 0;
 		}
 	}
 	
@@ -180,10 +203,33 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 		}
 
 		//Nao zera o estado: varios objetos podem consultar a mesma tecla no
-		//mesmo quadro. A limpeza acontece uma vez so, em endFrame().
+		//mesmo quadro. A troca de buffer acontece uma vez so, em beginFrame().
 		synchronized (inputLock)
 		{
-			return keyReleasedStates[keyCode];
+			return keyTypedFrame[keyCode] > 0;
+		}
+	}
+
+	/*******************************************
+   	* Name: keyTypedCount
+   	* Description: how many times the key was released during this frame. The
+   	*              boolean keyTyped/keyReleased answer whether it happened at
+   	*              all; this one preserves the count, so a scene that cares can
+   	*              react to each of two quick taps in the same frame instead of
+   	*              treating them as one.
+   	* Parameters: int
+   	* Returns: int
+   	******************************************/
+	public int keyTypedCount(int keyCode)
+	{
+		if (!isValidKey(keyCode))
+		{
+			return 0;
+		}
+
+		synchronized (inputLock)
+		{
+			return keyTypedFrame[keyCode];
 		}
 	}
 	
@@ -196,10 +242,10 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	public boolean mouseClicked()
 	{
 		//Nao zera o estado: todos os botoes do menu podem testar o mesmo
-		//clique no mesmo quadro. A limpeza acontece em endFrame().
+		//clique no mesmo quadro. A troca de buffer acontece em beginFrame().
 		synchronized (inputLock)
 		{
-			return mouseReleasedState;
+			return mouseClickedFrame > 0;
 		}
 	}
 	
@@ -273,11 +319,12 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	{
 		if(isValidKey(e.getKeyCode()))
 		{
-			//Marca o evento mesmo que a tecla tenha sido pressionada e solta
-			//entre dois quadros: assim um toque rapido nunca se perde
+			//Conta o evento no buffer pendente, mesmo que a tecla tenha sido
+			//pressionada e solta entre dois quadros: o proximo beginFrame o
+			//entrega, e um toque rapido nunca se perde
 			synchronized (inputLock)
 			{
-				keyReleasedStates[e.getKeyCode()] = true;
+				keyTypedPending[e.getKeyCode()]++;
 				keyStates[e.getKeyCode()] = false;
 			}
 		}
@@ -337,7 +384,7 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	{
 		synchronized (inputLock)
 		{
-			mouseReleasedState = true;
+			mouseClickedPending++;
 			mouseState = false;
 		}
 	}
@@ -387,7 +434,8 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	public void free()
 	{
 		keyStates = null;
-		keyReleasedStates = null;
+		keyTypedFrame = null;
+		keyTypedPending = null;
 		mousePosition.free();
 		mousePosition = null;
 	}

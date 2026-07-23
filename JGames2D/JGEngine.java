@@ -110,35 +110,32 @@ public class JGEngine implements Runnable
 	{
 		JGTimeManager.update();
 
-		try
+		//Abre o quadro de entrada antes de a cena ler: promove os eventos que
+		//a thread da AWT juntou desde o quadro anterior para o buffer que a
+		//cena le. O que chegar daqui em diante espera o proximo quadro, em vez
+		//de ser apagado antes de alguem ver.
+		inputManager.beginFrame();
+
+		JGLevel level = currentLevel;
+
+		if (level == null)
 		{
-			JGLevel level = currentLevel;
-
-			if (level == null)
-			{
-				return;
-			}
-
-			level.execute();
-
-			//A logica da cena pode ter trocado o nivel corrente. Nesse caso o nivel
-			//antigo ja foi liberado: o novo so sera desenhado no proximo quadro.
-			if (level != currentLevel)
-			{
-				return;
-			}
-
-			level.update();
-
-			windowManager.clearBackBuffer();
-			level.render();
+			return;
 		}
-		finally
+
+		level.execute();
+
+		//A logica da cena pode ter trocado o nivel corrente. Nesse caso o nivel
+		//antigo ja foi liberado: o novo so sera desenhado no proximo quadro.
+		if (level != currentLevel)
 		{
-			//Encerra o quadro de entrada: os eventos ficaram disponiveis para
-			//toda a cena durante o quadro inteiro e agora podem ser descartados
-			inputManager.endFrame();
+			return;
 		}
+
+		level.update();
+
+		windowManager.clearBackBuffer();
+		level.render();
 	}
 	
 	/***********************************************************
