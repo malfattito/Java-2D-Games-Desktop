@@ -20,6 +20,7 @@ import java.awt.GraphicsEnvironment;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -237,6 +238,7 @@ public class JGWindowManager extends JFrame
 
 		backBuffer = new BufferedImage(width,height,BufferedImage.TYPE_INT_RGB);
 		gameManager.graphics = backBuffer.createGraphics();
+		applyRenderingHints(gameManager.graphics);
 
 		//O quadro exibido fica numa copia propria. Sem isso a EDT leria o
 		//mesmo buffer que a thread do jogo esta desenhando, rasgando a imagem.
@@ -255,6 +257,32 @@ public class JGWindowManager extends JFrame
 			frontBuffer = new BufferedImage(width,height,BufferedImage.TYPE_INT_RGB);
 			frontGraphics = frontBuffer.createGraphics();
 		}
+	}
+
+	/***********************************************************
+	*Name: applyRenderingHints
+	*Description: sets the Java2D hints on a graphics context, tuned for
+	*             throughput rather than image quality: nearest-neighbour
+	*             resampling and speed-biased rendering keep the per-frame
+	*             cost down so the loop clears its 33 ms budget with room
+	*             to spare. Called on every back buffer (re)creation and on
+	*             the final scaled blit; kept in one place so setResolution's
+	*             buffer swap never drops the hints.
+	*Parameters: Graphics2D
+	*Return: none
+	************************************************************/
+	private void applyRenderingHints(Graphics2D graphics)
+	{
+		graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+				RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+		graphics.setRenderingHint(RenderingHints.KEY_RENDERING,
+				RenderingHints.VALUE_RENDER_SPEED);
+		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+				RenderingHints.VALUE_ANTIALIAS_OFF);
+		graphics.setRenderingHint(RenderingHints.KEY_ALPHA_INTERPOLATION,
+				RenderingHints.VALUE_ALPHA_INTERPOLATION_SPEED);
+		graphics.setRenderingHint(RenderingHints.KEY_COLOR_RENDERING,
+				RenderingHints.VALUE_COLOR_RENDER_SPEED);
 	}
 
 	/***********************************************************
@@ -686,6 +714,7 @@ public class JGWindowManager extends JFrame
 	{
 		Point origin = getContentOrigin();
 		Graphics2D g2d = (Graphics2D)graphics;
+		applyRenderingHints(g2d);
 
 		double scale = getRenderScale();
 		int destWidth = (int)(width * scale);

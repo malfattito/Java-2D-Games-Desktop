@@ -8,6 +8,8 @@
 //Package Declaration
 package JGames2D;
 
+import java.awt.Color;
+import java.awt.Font;
 import java.awt.Graphics2D;
 import java.util.ArrayList;
 
@@ -23,6 +25,17 @@ public class JGEngine implements Runnable
 	public JGLevel currentLevel = null;
 	private ArrayList<JGLevel> vetLevels = null;
 	private boolean executing = true;
+
+	//On-screen frame-time meter, turned on with -Djg.stats=true (or by
+	//setting showStats at runtime). Measures the work done per frame so a
+	//weak machine can be checked against the 33 ms budget.
+	public boolean showStats = false;
+	private long lastWorkNanos = 0;      //work time of the last finished frame
+	private long maxWorkNanos = 0;       //worst frame inside the current 1 s window
+	private long peakWorkNanos = 0;      //worst frame of the previous window (shown)
+	private int framesThisSecond = 0;    //frames counted in the current window
+	private int currentFps = 0;          //frames completed in the previous window
+	private long statsWindowStart = 0;   //start of the current 1 s window
 	
 	/***********************************************************
 	*Name: JGGameManager
@@ -33,6 +46,7 @@ public class JGEngine implements Runnable
 	public JGEngine()
 	{
 		loadResources();
+		showStats = Boolean.getBoolean("jg.stats");
 	}
 	
 	/***********************************************************
@@ -78,12 +92,15 @@ public class JGEngine implements Runnable
 	{
 		try
 		{
+			statsWindowStart = System.nanoTime();
+
 			while (executing)
 			{
 				long frameStart = System.nanoTime();
 
 				update();
 				swapBuffers();
+				recordFrame(System.nanoTime() - frameStart);
 				pause(frameStart);
 			}
 		}
@@ -136,6 +153,11 @@ public class JGEngine implements Runnable
 
 		windowManager.clearBackBuffer();
 		level.render();
+
+		if (showStats)
+		{
+			renderStats();
+		}
 	}
 	
 	/***********************************************************
@@ -164,6 +186,72 @@ public class JGEngine implements Runnable
 			Thread.currentThread().interrupt();
 			executing = false;
 		}
+	}
+
+	/***********************************************************
+	*Name: recordFrame
+	*Description: feeds the frame-time meter. Keeps the last frame's work
+	*             time and, over a rolling one second window, the achieved
+	*             frame count and the worst frame, so a spike over the
+	*             33 ms budget on a weak machine is visible.
+	*Parameters: long (work time of the frame, in nanoseconds)
+	*Return: none
+	************************************************************/
+	private void recordFrame(long workNanos)
+	{
+		lastWorkNanos = workNanos;
+
+		if (workNanos > maxWorkNanos)
+		{
+			maxWorkNanos = workNanos;
+		}
+
+		framesThisSecond++;
+
+		long now = System.nanoTime();
+
+		if (now - statsWindowStart >= 1000000000L)
+		{
+			currentFps = framesThisSecond;
+			peakWorkNanos = maxWorkNanos;
+			framesThisSecond = 0;
+			maxWorkNanos = 0;
+			statsWindowStart = now;
+		}
+	}
+
+	/***********************************************************
+	*Name: renderStats
+	*Description: draws the frame-time meter over the finished frame. Green
+	*             while the worst frame of the last second stayed inside the
+	*             budget, red once it spilled past it - that is the moment
+	*             the 30 FPS floor is at risk.
+	*Parameters: none
+	*Return: none
+	************************************************************/
+	private void renderStats()
+	{
+		if (graphics == null)
+		{
+			return;
+		}
+
+		double workMs = lastWorkNanos / 1000000.0;
+		double peakMs = peakWorkNanos / 1000000.0;
+		String line = String.format("FPS %d   %.1f ms   pico %.1f / %d ms",
+				currentFps, workMs, peakMs, FRAME_TIME);
+
+		Font previousFont = graphics.getFont();
+		Color previousColor = graphics.getColor();
+
+		graphics.setFont(new Font("Monospaced", Font.BOLD, 14));
+		graphics.setColor(new Color(0, 0, 0, 160));
+		graphics.fillRect(4, 4, 250, 22);
+		graphics.setColor(peakMs > FRAME_TIME ? Color.RED : Color.GREEN);
+		graphics.drawString(line, 10, 20);
+
+		graphics.setFont(previousFont);
+		graphics.setColor(previousColor);
 	}
 	
 	/***********************************************************

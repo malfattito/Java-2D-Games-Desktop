@@ -2,8 +2,16 @@ import JGames2D.JGEngine;
 
 public class GamePrincipal extends JGEngine
 {
-	public static void main(String[] args) 
+	public static void main(String[] args)
 	{
+		//PEDE AO SISTEMA O PIPELINE GRAFICO ACELERADO. PRECISA SER ANTES
+		//DE QUALQUER AWT/SWING - OU SEJA, ANTES DE INSTANCIAR O MOTOR,
+		//POIS O windowManager E UM JFrame E JA INICIALIZA O TOOLKIT.
+		System.setProperty("sun.java2d.opengl", "true");       //LINUX/WINDOWS: pipeline OpenGL
+		System.setProperty("sun.java2d.metal", "true");        //macOS: pipeline Metal (JDK 17+)
+		System.setProperty("sun.java2d.d3d", "true");          //WINDOWS: pipeline Direct3D
+		System.setProperty("awt.useSystemAAFontSettings", "on"); //ANTIALIAS DE FONTE DO SISTEMA
+
 		//INSTANCIA A CLASSE GERENCIADORA DO MOTOR
 		JGEngine engine = new JGEngine();
 		
