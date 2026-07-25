@@ -38,6 +38,14 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	private int mouseClickedFrame = 0;
 	private int mouseClickedPending = 0;
 
+	//Texto digitado neste quadro, no mesmo esquema de dois buffers dos toques: a
+	//thread da AWT acumula em typedPending os caracteres ja resolvidos (com o
+	//shift e o layout do teclado), e beginFrame promove para typedFrame, que a
+	//cena le. O keyTyped da AWT entrega o caractere pronto, o que o codigo da
+	//tecla sozinho nao daria. Serve a uma tela que pede resposta digitada.
+	private StringBuilder typedPending = null;
+	private String typedFrame = "";
+
 	private JGVector2D mousePosition = null;
 	private JGWindowManager windowManager = null;
 
@@ -57,6 +65,7 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 		keyStates = new boolean[KEYS_NUMBER];
 		keyTypedFrame = new int[KEYS_NUMBER];
 		keyTypedPending = new int[KEYS_NUMBER];
+		typedPending = new StringBuilder();
 
 		if (window instanceof JGWindowManager)
 		{
@@ -125,6 +134,8 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 			mouseState = false;
 			mouseClickedFrame = 0;
 			mouseClickedPending = 0;
+			typedPending.setLength(0);
+			typedFrame = "";
 		}
 	}
 
@@ -153,6 +164,8 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 			}
 			mouseClickedFrame = mouseClickedPending;
 			mouseClickedPending = 0;
+			typedFrame = typedPending.toString();
+			typedPending.setLength(0);
 		}
 	}
 	
@@ -338,7 +351,35 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 	************************************************************/
 	public void keyTyped(KeyEvent e)
 	{
-		
+		//O keyTyped da AWT entrega o caractere ja resolvido - com o shift e o
+		//layout aplicados -, o que o codigo da tecla sozinho nao daria. Guarda
+		//tudo o que tem caractere definido (letras, digitos, simbolos, espaco e
+		//tambem o backspace '\b'); quem le decide o que fazer com cada um.
+		if (e.getKeyChar() != KeyEvent.CHAR_UNDEFINED)
+		{
+			synchronized (inputLock)
+			{
+				typedPending.append(e.getKeyChar());
+			}
+		}
+	}
+
+	/*******************************************
+   	* Name: getTypedChars
+   	* Description: the characters typed during this frame, already resolved with
+   	*              shift and the keyboard layout, in the order they were typed.
+   	*              Includes backspace as '\b'; the reader appends the printable
+   	*              ones and treats '\b' as a delete. Not consumed on read, like
+   	*              the other edge events: the buffer swaps once, in beginFrame.
+   	* Parameters: none
+   	* Returns: String
+   	******************************************/
+	public String getTypedChars()
+	{
+		synchronized (inputLock)
+		{
+			return typedFrame;
+		}
 	}
 	
 	/***********************************************************
@@ -436,6 +477,8 @@ public class JGInputManager implements KeyListener, MouseListener, MouseMotionLi
 		keyStates = null;
 		keyTypedFrame = null;
 		keyTypedPending = null;
+		typedPending = null;
+		typedFrame = null;
 		mousePosition.free();
 		mousePosition = null;
 	}
