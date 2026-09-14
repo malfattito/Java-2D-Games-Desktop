@@ -104,6 +104,31 @@ public class JGTopDownLayer extends JGLayer
 	}
 
 	/***********************************************************
+	*Name: GroundPainter
+	*Description: quem pinta no chao da camada, chamado depois dos tiles do
+	*             chao e antes dos predios e dos atores. E onde entra uma marca
+	*             que pertence ao chao - um alvo, uma sombra, uma pegada -, para
+	*             que tudo o que se levanta dele passe por cima dela.
+	************************************************************/
+	public interface GroundPainter
+	{
+		void paintGround(Graphics2D graphics);
+	}
+
+	private GroundPainter groundPainter = null;
+
+	/***********************************************************
+	*Name: setGroundPainter
+	*Description: define quem pinta no chao, ou null para ninguem
+	*Parameters: GroundPainter
+	*Return: none
+	************************************************************/
+	public void setGroundPainter(GroundPainter painter)
+	{
+		groundPainter = painter;
+	}
+
+	/***********************************************************
 	*Name: setPerspective
 	*Description: how much the walls open outwards. Zero gives a flat top
 	*             view with no walls at all; the usual range is 0.05 to 0.25.
@@ -401,6 +426,14 @@ public class JGTopDownLayer extends JGLayer
 				drawBlock(vetBlocks[blockIndex].getFrameIndex(), blockX, blockY,
 				          nextX - blockX, nextY - blockY, graphics);
 			}
+		}
+
+		//O que se pinta no chao: entre o chao e tudo o que se levanta dele, para
+		//uma marca no asfalto ficar debaixo dos carros e de quem anda por cima
+		//dela, e nao colada sobre a cena
+		if (groundPainter != null)
+		{
+			groundPainter.paintGround(graphics);
 		}
 
 		if (vetHeights == null)
