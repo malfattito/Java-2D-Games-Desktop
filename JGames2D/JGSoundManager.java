@@ -178,6 +178,9 @@ public class JGSoundManager
 			sound.free();
 		}
 		vetSoundEffects.clear();
+
+		//A linha da placa de som, aberta uma vez para todos, fecha com eles
+		JGAudioMixer.close();
 		vetSoundEffects = null;
 	}
 }
