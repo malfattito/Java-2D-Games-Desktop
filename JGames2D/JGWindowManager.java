@@ -268,6 +268,43 @@ public class JGWindowManager extends JFrame
 	}
 
 	/***********************************************************
+	*Name: warmFonts
+	*Description: mede e desenha uma vez cada familia de fonte dada, no buffer
+	*             de tras, e o limpa. O primeiro uso de uma fonte no Java2D
+	*             custa uma fracao de segundo - o subsistema de fontes sobe e a
+	*             familia e carregada -, e paga uma vez por processo, nao por
+	*             tela: sem isto o primeiro quadro de cada tela que a estreia
+	*             levava de 150 a 300 ms. Chamado depois de setResolution e
+	*             antes de a janela aparecer, o custo fica no arranque.
+	*Parameters: String...
+	*Return: none
+	************************************************************/
+	public void warmFonts(String... families)
+	{
+		Graphics2D graphics = this.graphics[renderIndex];
+
+		if (graphics == null)
+		{
+			return;
+		}
+
+		java.awt.Font previous = graphics.getFont();
+
+		for (String family : families)
+		{
+			for (int style : new int[]{ java.awt.Font.PLAIN, java.awt.Font.BOLD })
+			{
+				graphics.setFont(new java.awt.Font(family, style, 14));
+				graphics.getFontMetrics().stringWidth("MakeMeDev 0123456789");
+				graphics.drawString("MakeMeDev 0123456789", 0, 20);
+			}
+		}
+
+		graphics.setFont(previous);
+		clearBackBuffer();
+	}
+
+	/***********************************************************
 	*Name: applyRenderingHints
 	*Description: sets the Java2D hints on a graphics context, tuned for
 	*             throughput rather than image quality: nearest-neighbour

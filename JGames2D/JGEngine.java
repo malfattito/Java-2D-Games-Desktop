@@ -15,8 +15,10 @@ import java.util.ArrayList;
 
 public class JGEngine implements Runnable
 {
-	//Constants of the class
-	private final int FRAME_TIME = 33;
+	//O tempo de um quadro em ms: 33 (30 quadros por segundo) por padrao,
+	//que setFrameRate troca. A logica de um jogo anda por tempo, entao a
+	//taxa e so uma escolha de fluidez contra trabalho.
+	private int frameTime = 33;
 
 	//Criada uma vez: um new Font por quadro so gera lixo para o coletor
 	private static final Font STATS_FONT = new Font("Monospaced", Font.BOLD, 14);
@@ -164,6 +166,20 @@ public class JGEngine implements Runnable
 	}
 	
 	/***********************************************************
+	*Name: setFrameRate
+	*Description: quantos quadros por segundo o laco tenta manter - 30 por
+	*             padrao. A logica e por tempo (JGTimeManager e JGTimer), entao
+	*             subir a taxa so custa trabalho por segundo; com o quadro em
+	*             poucos milissegundos, 60 e de graca.
+	*Parameters: int
+	*Return: none
+	************************************************************/
+	public void setFrameRate(int framesPerSecond)
+	{
+		frameTime = Math.max(1, Math.round(1000.0f / Math.max(1, framesPerSecond)));
+	}
+
+	/***********************************************************
 	*Name: pause
 	*Description: pause the game loop
 	*Parameters: none
@@ -173,7 +189,7 @@ public class JGEngine implements Runnable
 	{
 		//Desconta o tempo ja gasto no quadro para manter a taxa constante
 		long elapsed = (System.nanoTime() - frameStart) / 1000000L;
-		long remaining = FRAME_TIME - elapsed;
+		long remaining = frameTime - elapsed;
 
 		if (remaining <= 0)
 		{
@@ -242,7 +258,7 @@ public class JGEngine implements Runnable
 		double workMs = lastWorkNanos / 1000000.0;
 		double peakMs = peakWorkNanos / 1000000.0;
 		String line = String.format("FPS %d   %.1f ms   pico %.1f / %d ms",
-				currentFps, workMs, peakMs, FRAME_TIME);
+				currentFps, workMs, peakMs, frameTime);
 
 		Font previousFont = graphics.getFont();
 		Color previousColor = graphics.getColor();
@@ -250,7 +266,7 @@ public class JGEngine implements Runnable
 		graphics.setFont(STATS_FONT);
 		graphics.setColor(new Color(0, 0, 0, 160));
 		graphics.fillRect(4, 4, 250, 22);
-		graphics.setColor(peakMs > FRAME_TIME ? Color.RED : Color.GREEN);
+		graphics.setColor(peakMs > frameTime ? Color.RED : Color.GREEN);
 		graphics.drawString(line, 10, 20);
 
 		graphics.setFont(previousFont);
