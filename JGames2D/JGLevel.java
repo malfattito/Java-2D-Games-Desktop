@@ -68,18 +68,23 @@ public abstract class JGLevel
 	************************************************************/
 	public void render()
 	{
+		//Lacos indexados: o for-each aloca um Iterator por lista a cada quadro
 		//Renderiza as camadas
-		for (JGLayer layer : vetLayers)
+		for (int index = 0; index < vetLayers.size(); index++)
 		{
+			JGLayer layer = vetLayers.get(index);
+
 			if (layer.getAutoRender())
 			{
 				layer.render();
 			}
 		}
-		
+
 		//Renderiza os sprites
-		for (JGSprite sprite : vetSprites)
+		for (int index = 0; index < vetSprites.size(); index++)
 		{
+			JGSprite sprite = vetSprites.get(index);
+
 			if (sprite.autoRender)
 			{
 				sprite.render();
@@ -87,15 +92,17 @@ public abstract class JGLevel
 		}
 
 		//Os textos por ultimo: assim ficam sempre por cima da cena
-		for (JGFont text : vetTexts)
+		for (int index = 0; index < vetTexts.size(); index++)
 		{
+			JGFont text = vetTexts.get(index);
+
 			if (text.autoRender)
 			{
 				text.render();
 			}
 		}
 	}
-	
+
 	/***********************************************************
 	*Name: update()
 	*Description: updates the elements of visual objects
@@ -105,15 +112,15 @@ public abstract class JGLevel
 	public void update()
 	{
 		//Atualiza as camadas
-		for (JGLayer layer : vetLayers)
+		for (int index = 0; index < vetLayers.size(); index++)
 		{
-			layer.scrollLayer();
+			vetLayers.get(index).scrollLayer();
 		}
-		
+
 		//Atualiza os sprites
-		for (JGSprite sprite : vetSprites)
+		for (int index = 0; index < vetSprites.size(); index++)
 		{
-			sprite.updateSprite();
+			vetSprites.get(index).updateSprite();
 		}
 	}
 	

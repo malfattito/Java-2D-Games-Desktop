@@ -33,6 +33,12 @@ public class JGTopDownLayer extends JGLayer
 	private final java.awt.geom.Path2D.Double facePath = new java.awt.geom.Path2D.Double();
 	private AffineTransform faceTransform = null;
 
+	//Colunas e linhas do mapa em cache, atualizadas no inicio de cada desenho:
+	//coletar e desenhar os predios visita milhares de celulas por quadro, e sem
+	//isto cada uma refaria o cast de layerSize. Sem efeito no resultado.
+	private int mapColumns = 0;
+	private int mapLines = 0;
+
 	//Lista dos predios visiveis, reaproveitada a cada quadro para nao
 	//alocar nada dentro do laco de desenho
 	private int[] vetVisibleColumn = new int[256];
@@ -256,8 +262,8 @@ public class JGTopDownLayer extends JGLayer
 	************************************************************/
 	public int getHeightByCell(int column, int line)
 	{
-		int columns = (int)layerSize.getX();
-		int lines = (int)layerSize.getY();
+		int columns = (mapColumns > 0) ? mapColumns : (int)layerSize.getX();
+		int lines = (mapLines > 0) ? mapLines : (int)layerSize.getY();
 
 		if (vetHeights == null || columns <= 0 || lines <= 0)
 		{
@@ -269,15 +275,36 @@ public class JGTopDownLayer extends JGLayer
 
 	/***********************************************************
 	*Name: getHeightAt
-	*Description: height of the cell under a screen position
+	*Description: height of the cell under a screen position. Same result as
+	*             before, but the cell is computed inline instead of through
+	*             screenToCell, which allocated a vector on every call - and the
+	*             collision hot path asks this many times per frame.
 	*Parameters: double, double
 	*Return: int
 	************************************************************/
 	public int getHeightAt(double screenX, double screenY)
 	{
-		JGVector2D cell = screenToCell(screenX, screenY);
+		int column = (int)Math.floor((screenX - offset.getX()) / blockSize.getX());
+		int line = (int)Math.floor((screenY - offset.getY()) / blockSize.getY());
 
-		return getHeightByCell((int)cell.getX(), (int)cell.getY());
+		return getHeightByCell(column, line);
+	}
+
+	/***********************************************************
+	*Name: getFrameIndexAt
+	*Description: floor tile under a screen position. Overrides the base only to
+	*             compute the cell inline, without the vector screenToCell
+	*             allocated - same result, no garbage. isBlockAt, which calls
+	*             this, benefits through the override.
+	*Parameters: double, double
+	*Return: int
+	************************************************************/
+	public int getFrameIndexAt(double screenX, double screenY)
+	{
+		int column = (int)Math.floor((screenX - offset.getX()) / blockSize.getX());
+		int line = (int)Math.floor((screenY - offset.getY()) / blockSize.getY());
+
+		return getFrameIndexByCell(column, line);
 	}
 
 	/***********************************************************
@@ -339,6 +366,11 @@ public class JGTopDownLayer extends JGLayer
 		int screenWidth = gameManager.windowManager.getResolutionWidth();
 		int screenHeight = gameManager.windowManager.getResolutionHeight();
 		Graphics2D graphics = gameManager.graphics;
+
+		//colunas/linhas do quadro em cache, para os lacos de predios adiante nao
+		//refazerem o cast de layerSize a cada uma das milhares de celulas visitadas
+		mapColumns = columns;
+		mapLines = lines;
 
 		//Celulas que tocam a tela
 		int firstColumn = (int)Math.floor((0 - offset.getX()) / blockWidth);
@@ -485,6 +517,17 @@ public class JGTopDownLayer extends JGLayer
 		for (int index = 0; index < count; index++)
 		{
 			JGVector2D position = actors.get(index).position;
+
+			//um sprite ja descartado tem a posicao nula: fica no fim da fila, e
+			//render() o pula por nao ter quadros. Derrubar a thread do jogo por
+			//um ator morto na lista seria pagar caro por um erro da cena.
+			if (position == null)
+			{
+				actorKey[index] = Double.NEGATIVE_INFINITY;
+				actorOrder[index] = index;
+				continue;
+			}
+
 			double deltaX = position.getX() - cameraX;
 			double deltaY = position.getY() - cameraY;
 			actorKey[index] = deltaX * deltaX + deltaY * deltaY;

@@ -40,9 +40,19 @@ public class JGWindowManager extends JFrame
 	private String windowTitle = null;
 	private boolean fullScreen;
 	private GraphicsDevice graphDevice = null;
-	private BufferedImage backBuffer = null;
-	private BufferedImage frontBuffer = null;
-	private Graphics2D frontGraphics = null;
+
+	//Duplo buffer por troca de referencia, e nao por copia: a thread do jogo
+	//desenha em buffers[renderIndex] enquanto a EDT pinta buffers[displayIndex].
+	//No fim do quadro os papeis se invertem, sem copiar pixel nenhum entre os
+	//dois - o que economiza uma passada de tela cheia por quadro.
+	//
+	//CONTRATO: a cena deve ler gameManager.graphics a cada quadro, nunca guardar
+	//a referencia numa variavel e reutiliza-la - ela passa a apontar para o
+	//outro buffer a cada troca. Todas as cenas do motor ja fazem assim.
+	private final BufferedImage[] buffers = new BufferedImage[2];
+	private final Graphics2D[] graphics = new Graphics2D[2];
+	private int renderIndex = 0;
+	private int displayIndex = 1;
 	private final Object bufferLock = new Object();
 	private JGEngine gameManager = null;
 	private Cursor cursor = null;
@@ -81,7 +91,7 @@ public class JGWindowManager extends JFrame
 	************************************************************/
 	Graphics2D getGraphicsBackBuffer()
 	{
-		return backBuffer.createGraphics();
+		return buffers[renderIndex].createGraphics();
 	}
 	
 	/***********************************************************
@@ -160,13 +170,16 @@ public class JGWindowManager extends JFrame
 	
 	/***********************************************************
 	*Name: getBackBufferImage
-	*Description: returns the backbuffer
+	*Description: returns the last frame published by presentFrame. A hand-driven
+	*             test that dumps the frame must call presentFrame() before
+	*             reading, so this returns the finished frame and not the one
+	*             half drawn.
 	*Parameters:None
 	*Return: BufferedImage
 	************************************************************/
 	public BufferedImage getBackBufferImage()
 	{
-		return backBuffer;
+		return buffers[displayIndex];
 	}
 	
 	/***********************************************************
@@ -226,36 +239,31 @@ public class JGWindowManager extends JFrame
 	************************************************************/
 	private void createBackBuffer()
 	{
-		if (gameManager.graphics != null)
-		{
-			gameManager.graphics.dispose();
-		}
-
-		if (backBuffer != null)
-		{
-			backBuffer.flush();
-		}
-
-		backBuffer = new BufferedImage(width,height,BufferedImage.TYPE_INT_RGB);
-		gameManager.graphics = backBuffer.createGraphics();
-		applyRenderingHints(gameManager.graphics);
-
-		//O quadro exibido fica numa copia propria. Sem isso a EDT leria o
-		//mesmo buffer que a thread do jogo esta desenhando, rasgando a imagem.
+		//Os dois buffers vivem ao mesmo tempo: um sendo desenhado, o outro
+		//sendo exibido. A EDT pode estar dentro de paint() lendo o exibido, por
+		//isso a troca acontece sob o cadeado que ela tambem usa.
 		synchronized (bufferLock)
 		{
-			if (frontGraphics != null)
+			for (int index = 0; index < 2; index++)
 			{
-				frontGraphics.dispose();
+				if (graphics[index] != null)
+				{
+					graphics[index].dispose();
+				}
+
+				if (buffers[index] != null)
+				{
+					buffers[index].flush();
+				}
+
+				buffers[index] = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+				graphics[index] = buffers[index].createGraphics();
+				applyRenderingHints(graphics[index]);
 			}
 
-			if (frontBuffer != null)
-			{
-				frontBuffer.flush();
-			}
-
-			frontBuffer = new BufferedImage(width,height,BufferedImage.TYPE_INT_RGB);
-			frontGraphics = frontBuffer.createGraphics();
+			renderIndex = 0;
+			displayIndex = 1;
+			gameManager.graphics = graphics[renderIndex];
 		}
 	}
 
@@ -287,8 +295,10 @@ public class JGWindowManager extends JFrame
 
 	/***********************************************************
 	*Name: presentFrame
-	*Description: publishes the finished frame: copies the back buffer into
-	*             the front buffer and asks the window to repaint itself
+	*Description: publishes the finished frame. Instead of copying the back
+	*             buffer into the front one, it swaps their roles: the buffer
+	*             just drawn becomes the one the EDT paints, and the next frame
+	*             is drawn into the other. No pixels are copied.
 	*Parameters: none
 	*Return: none
 	************************************************************/
@@ -296,12 +306,17 @@ public class JGWindowManager extends JFrame
 	{
 		synchronized (bufferLock)
 		{
-			if (frontGraphics == null || backBuffer == null)
+			if (graphics[renderIndex] == null)
 			{
 				return;
 			}
 
-			frontGraphics.drawImage(backBuffer, 0, 0, null);
+			//O quadro recem-desenhado passa a ser o exibido; o proximo vai no
+			//outro buffer. A EDT pinta o exibido e nunca toca no que sera
+			//desenhado, entao nao ha corrida de pixels nem imagem rasgada.
+			displayIndex = renderIndex;
+			renderIndex = 1 - renderIndex;
+			gameManager.graphics = graphics[renderIndex];
 		}
 
 		repaint();
@@ -316,7 +331,7 @@ public class JGWindowManager extends JFrame
 	private void initWindow()
 	{
 		
-		if (backBuffer == null)
+		if (buffers[0] == null)
 		{
 			createBackBuffer();
 		}
@@ -358,7 +373,11 @@ public class JGWindowManager extends JFrame
 
 			colorDepth = graphDevice.getDisplayMode().getBitDepth();
 
-			if (isNativeFullScreenAvailable())
+			//A permissao tem de ser pedida antes de a janela aparecer: e ela
+			//que diz se a tela cheia nativa esta ao alcance. Depois de exibida
+			//nao ha volta - setUndecorated recusa uma janela ja mostrada, e
+			//descobrir o impedimento so entao deixaria o jogo numa janelinha.
+			if (allowNativeFullScreen())
 			{
 				//macOS: tela cheia nativa, a mesma do botao verde. Esconde o
 				//dock e a barra de menu. Exige janela decorada e redimensionavel.
@@ -615,21 +634,40 @@ public class JGWindowManager extends JFrame
 	}
 
 	/***********************************************************
-	*Name: isNativeFullScreenAvailable
-	*Description: tells if the macOS native fullscreen API can be used
+	*Name: allowNativeFullScreen
+	*Description: marks the window as able to go fullscreen on macOS, and by
+	*             doing it tells if the native API is really within reach.
+	*
+	*             Merely finding the classes is not enough: com.apple.eawt
+	*             exists inside java.desktop but the module does not export it,
+	*             so from Java 9 on the reflection only fails when it is used.
+	*             The permission is asked here, before the window is shown,
+	*             precisely so a refusal can still be answered with the
+	*             borderless window instead of a small one in the corner.
+	*
+	*             Where it is refused the log says so, and the way out is the
+	*             flag --add-exports java.desktop/com.apple.eawt=ALL-UNNAMED
+	*             on the java command, or the same as Add-Exports in the
+	*             manifest of the jar.
 	*Parameters: none
 	*Return: boolean
 	************************************************************/
-	private boolean isNativeFullScreenAvailable()
+	private boolean allowNativeFullScreen()
 	{
 		try
 		{
-			Class.forName("com.apple.eawt.FullScreenUtilities");
-			Class.forName("com.apple.eawt.Application");
+			Class<?> utils = Class.forName("com.apple.eawt.FullScreenUtilities");
+			utils.getMethod("setWindowCanFullScreen", java.awt.Window.class, boolean.class)
+			     .invoke(null, this, Boolean.TRUE);
+
+			//A troca em si vem depois, e passa pela mesma classe
+			Class.forName("com.apple.eawt.Application").getMethod("getApplication");
+
 			return true;
 		}
 		catch(Throwable t)
 		{
+			JGLog.writeLog("TELA CHEIA NATIVA INDISPONIVEL, USANDO JANELA SEM BORDA: " + t + "\n");
 			return false;
 		}
 	}
@@ -638,6 +676,7 @@ public class JGWindowManager extends JFrame
 	*Name: requestNativeFullScreen
 	*Description: asks macOS to put this window in fullscreen. Called by
 	*             reflection so the engine still compiles and runs elsewhere.
+	*             Only makes sense after allowNativeFullScreen said yes.
 	*Parameters: none
 	*Return: boolean
 	************************************************************/
@@ -645,10 +684,6 @@ public class JGWindowManager extends JFrame
 	{
 		try
 		{
-			Class<?> utils = Class.forName("com.apple.eawt.FullScreenUtilities");
-			utils.getMethod("setWindowCanFullScreen", java.awt.Window.class, boolean.class)
-			     .invoke(null, this, Boolean.TRUE);
-
 			Class<?> application = Class.forName("com.apple.eawt.Application");
 			Object instance = application.getMethod("getApplication").invoke(null);
 			application.getMethod("requestToggleFullScreen", java.awt.Window.class)
@@ -658,7 +693,7 @@ public class JGWindowManager extends JFrame
 		}
 		catch(Throwable t)
 		{
-			JGLog.writeLog("TELA CHEIA NATIVA INDISPONIVEL: " + t + "\n");
+			JGLog.writeLog("TELA CHEIA NATIVA RECUSADA: " + t + "\n");
 			return false;
 		}
 	}
@@ -739,19 +774,21 @@ public class JGWindowManager extends JFrame
 		//Le o quadro publicado, nunca o que esta sendo desenhado agora
 		synchronized (bufferLock)
 		{
-			if (frontBuffer == null)
+			BufferedImage frame = buffers[displayIndex];
+
+			if (frame == null)
 			{
 				return;
 			}
 
 			if (!fullScreen)
 			{
-				g2d.drawImage(frontBuffer,origin.x,origin.y,null);
+				g2d.drawImage(frame,origin.x,origin.y,null);
 				return;
 			}
 
-			g2d.drawImage(frontBuffer, origin.x, origin.y, origin.x + destWidth, origin.y + destHeight,
-					                   0, 0, width, height, null);
+			g2d.drawImage(frame, origin.x, origin.y, origin.x + destWidth, origin.y + destHeight,
+					             0, 0, width, height, null);
 		}
 	}
 	
@@ -770,33 +807,28 @@ public class JGWindowManager extends JFrame
 		setAlwaysOnTop(false);
 		setVisible(false);
 
-		if (gameManager != null && gameManager.graphics != null)
+		if (gameManager != null)
 		{
-			gameManager.graphics.dispose();
 			gameManager.graphics = null;
 		}
 
-		BufferedImage buffer = backBuffer;
-		backBuffer = null;
-		if (buffer != null)
-		{
-			buffer.flush();
-		}
-
-		//A EDT pode estar dentro de paint(): so libera o quadro exibido
-		//depois de obter o mesmo cadeado que ela usa
+		//A EDT pode estar dentro de paint() lendo o buffer exibido: so libera os
+		//dois depois de obter o mesmo cadeado que ela usa
 		synchronized (bufferLock)
 		{
-			if (frontGraphics != null)
+			for (int index = 0; index < 2; index++)
 			{
-				frontGraphics.dispose();
-				frontGraphics = null;
-			}
+				if (graphics[index] != null)
+				{
+					graphics[index].dispose();
+					graphics[index] = null;
+				}
 
-			if (frontBuffer != null)
-			{
-				frontBuffer.flush();
-				frontBuffer = null;
+				if (buffers[index] != null)
+				{
+					buffers[index].flush();
+					buffers[index] = null;
+				}
 			}
 		}
 

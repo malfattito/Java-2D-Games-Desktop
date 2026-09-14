@@ -17,6 +17,9 @@ public class JGEngine implements Runnable
 {
 	//Constants of the class
 	private final int FRAME_TIME = 33;
+
+	//Criada uma vez: um new Font por quadro so gera lixo para o coletor
+	private static final Font STATS_FONT = new Font("Monospaced", Font.BOLD, 14);
 	
 	//Class attributes
 	public JGWindowManager windowManager = null;
@@ -244,7 +247,7 @@ public class JGEngine implements Runnable
 		Font previousFont = graphics.getFont();
 		Color previousColor = graphics.getColor();
 
-		graphics.setFont(new Font("Monospaced", Font.BOLD, 14));
+		graphics.setFont(STATS_FONT);
 		graphics.setColor(new Color(0, 0, 0, 160));
 		graphics.fillRect(4, 4, 250, 22);
 		graphics.setColor(peakMs > FRAME_TIME ? Color.RED : Color.GREEN);
