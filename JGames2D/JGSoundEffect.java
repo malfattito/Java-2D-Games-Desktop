@@ -32,6 +32,9 @@ public class JGSoundEffect
 	private short[] samples = null;
 	private int voices = VOICES;
 	private volatile float volume = 100.0f;
+
+	//o passo de leitura, que e o tom: 1 e a altura em que o arquivo foi escrito
+	private volatile float rate = 1.0f;
 	private String fileName = null;
 	
 	/***********************************************************
@@ -201,6 +204,38 @@ public class JGSoundEffect
 	}
 
 	/***********************************************************
+	*Name: setRate
+	*Description: o tom, como passo de leitura das amostras: 1 e a altura em que
+	*             o arquivo foi escrito, 2 uma oitava acima e meio uma oitava
+	*             abaixo. Vale tambem para o que ja esta soando, que e o que
+	*             permite um som acompanhar alguma coisa do jogo - o motor de um
+	*             carro com a rotacao. Acima de umas duas vezes a amostra afina e
+	*             perde corpo, entao o alcance util e estreito.
+	*Parameters: float
+	*Return: None
+	************************************************************/
+	public void setRate(float rate)
+	{
+		this.rate = Math.max(0.25f, Math.min(4.0f, rate));
+	}
+
+	public float getRate()
+	{
+		return rate;
+	}
+
+	/***********************************************************
+	*Name: rate
+	*Description: o passo de leitura que o misturador aplica
+	*Parameters: none
+	*Return: float
+	************************************************************/
+	float rate()
+	{
+		return rate;
+	}
+
+	/***********************************************************
 	*Name: play
 	*Description: start sound reproduction. Overlaps with the previous
 	*             reproductions instead of cutting them off.
@@ -230,6 +265,49 @@ public class JGSoundEffect
 			mixer.stop(this);
 			mixer.start(this, samples, true, 1);
 		}
+	}
+
+	/***********************************************************
+	*Name: loopVoice
+	*Description: poe mais uma voz deste som a tocar em laco, com volume, lado
+	*             e tom proprios, e devolve o comando dela. E o que permite o
+	*             mesmo arquivo soar varias vezes ao mesmo tempo em distancias
+	*             diferentes - os carros da rua, cada um no seu volume. Diferente
+	*             de loop(), que e a trilha e cala as outras vozes antes de
+	*             comecar. Devolve null se nao ha som.
+	*Parameters: float, float
+	*Return: JGVoice
+	************************************************************/
+	public JGVoice loopVoice(float volume, float rate)
+	{
+		return voice(true, volume, rate);
+	}
+
+	/***********************************************************
+	*Name: playVoice
+	*Description: como loopVoice, mas uma vez so: o passo de um pe, que nasce
+	*             no volume e no tom dele e nao mexe no passo anterior, que
+	*             ainda pode estar soando. Devolve null se nao ha som.
+	*Parameters: float, float
+	*Return: JGVoice
+	************************************************************/
+	public JGVoice playVoice(float volume, float rate)
+	{
+		return voice(false, volume, rate);
+	}
+
+	private JGVoice voice(boolean loop, float volume, float rate)
+	{
+		if (samples == null)
+		{
+			return null;
+		}
+
+		float level = Math.max(0.0f, Math.min(100.0f, volume)) / 100.0f;
+		float step = Math.max(0.25f, Math.min(4.0f, rate));
+		JGAudioMixer.Voice started = JGAudioMixer.get().free(this, samples, loop, level, level, step);
+
+		return started == null ? null : new JGVoice(started, volume, 0.0f);
 	}
 
 	/***********************************************************

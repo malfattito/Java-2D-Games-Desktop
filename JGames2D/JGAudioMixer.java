@@ -63,9 +63,23 @@ final class JGAudioMixer implements Runnable
 	{
 		JGSoundEffect owner = null;
 		short[] samples = null;
-		int position = 0;
+
+		//onde a voz esta nas amostras, em quadros e com casa decimal: o passo
+		//de leitura e o tom, e um tom que nao seja o do arquivo cai entre dois
+		//quadros
+		double position = 0;
 		boolean loop = false;
 		long started = 0;
+
+		//Uma voz comum segue o volume e o tom do som que a criou: e o caso de
+		//quase tudo, e e o que deixa um som inteiro subir ou descer de uma vez.
+		//Uma voz livre carrega os seus, e e o que permite o mesmo arquivo soar
+		//varias vezes ao mesmo tempo em volumes, lados e tons diferentes - os
+		//carros da rua, cada um na sua distancia.
+		boolean own = true;
+		volatile float gainLeft = 1.0f;
+		volatile float gainRight = 1.0f;
+		volatile float rate = 1.0f;
 	}
 
 	/***********************************************************
@@ -131,11 +145,11 @@ final class JGAudioMixer implements Runnable
 	*Parameters: JGSoundEffect, short[], boolean, int
 	*Return: none
 	************************************************************/
-	synchronized void start(JGSoundEffect owner, short[] samples, boolean loop, int mostOfOwner)
+	synchronized Voice start(JGSoundEffect owner, short[] samples, boolean loop, int mostOfOwner)
 	{
 		if (line == null || samples == null || samples.length == 0)
 		{
-			return;
+			return null;
 		}
 
 		int mine = 0;
@@ -180,6 +194,74 @@ final class JGAudioMixer implements Runnable
 		voice.loop = loop;
 		voice.started = serial++;
 		voices[voiceCount++] = voice;
+
+		return voice;
+	}
+
+	/***********************************************************
+	*Name: free
+	*Description: poe uma voz solta a tocar - com volume, lado e tom proprios,
+	*             fora do comando do som que a criou -, sem o limite por som:
+	*             varias copias do mesmo arquivo soando ao mesmo tempo sao
+	*             justamente o caso de uso, e o teto de vozes do misturador
+	*             continua valendo
+	*Parameters: JGSoundEffect, short[], boolean
+	*Return: Voice, ou null
+	************************************************************/
+	synchronized Voice free(JGSoundEffect owner, short[] samples, boolean loop,
+	                        float gainLeft, float gainRight, float rate)
+	{
+		//tudo dentro do mesmo trinco em que a mistura entra: a voz nasce ja no
+		//volume e no tom que lhe cabem, e nao ha o quadro em que ela soaria no
+		//volume de outra pessoa
+		Voice voice = start(owner, samples, loop, MOST_VOICES);
+
+		if (voice != null)
+		{
+			voice.own = false;
+			voice.gainLeft = gainLeft;
+			voice.gainRight = gainRight;
+			voice.rate = rate;
+		}
+
+		return voice;
+	}
+
+	/***********************************************************
+	*Name: silence
+	*Description: cala uma voz sozinha, sem mexer nas outras do mesmo som
+	*Parameters: Voice
+	*Return: none
+	************************************************************/
+	synchronized void silence(Voice voice)
+	{
+		for (int index = voiceCount - 1; index >= 0; index--)
+		{
+			if (voices[index] == voice)
+			{
+				remove(index);
+				return;
+			}
+		}
+	}
+
+	/***********************************************************
+	*Name: sounding
+	*Description: diz se uma voz ainda esta na lista
+	*Parameters: Voice
+	*Return: boolean
+	************************************************************/
+	synchronized boolean sounding(Voice voice)
+	{
+		for (int index = 0; index < voiceCount; index++)
+		{
+			if (voices[index] == voice)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/***********************************************************
@@ -243,9 +325,9 @@ final class JGAudioMixer implements Runnable
 
 	/***********************************************************
 	*Name: mix
-	*Description: adds every voice into the block at its volume, moves each
-	*             one on, drops the ones that ended, and packs the sum into
-	*             16-bit samples, clipped
+	*Description: adds every voice into the block at its volume and at its
+	*             pitch, moves each one on, drops the ones that ended, and packs
+	*             the sum into 16-bit samples, clipped
 	*Parameters: none
 	*Return: none
 	************************************************************/
@@ -261,14 +343,17 @@ final class JGAudioMixer implements Runnable
 			for (int index = voiceCount - 1; index >= 0; index--)
 			{
 				Voice voice = voices[index];
-				float gain = voice.owner.gain();
+				float left = voice.own ? voice.owner.gain() : voice.gainLeft;
+				float right = voice.own ? voice.owner.gain() : voice.gainRight;
+				double rate = voice.own ? voice.owner.rate() : voice.rate;
 				short[] samples = voice.samples;
-				int position = voice.position;
+				int frames = samples.length / CHANNELS;
+				double at = voice.position;
 				boolean ended = false;
 
-				for (int at = 0; at < sum.length; at++)
+				for (int frame = 0; frame < BLOCK_FRAMES; frame++)
 				{
-					if (position >= samples.length)
+					if (at >= frames)
 					{
 						if (!voice.loop)
 						{
@@ -276,13 +361,28 @@ final class JGAudioMixer implements Runnable
 							break;
 						}
 
-						position = 0;
+						at -= frames * Math.floor(at / frames);
 					}
 
-					sum[at] += (int)(samples[position++] * gain);
+					//entre dois quadros: a amostra sai da reta entre eles, que e
+					//o que deixa o tom variar sem o serrilhado de repetir e
+					//pular amostras
+					int first = (int)at;
+					double part = at - first;
+					int second = first + 1 < frames ? first + 1 : (voice.loop ? 0 : first);
+
+					for (int channel = 0; channel < CHANNELS; channel++)
+					{
+						double sample = samples[first * CHANNELS + channel] * (1.0 - part)
+						                + samples[second * CHANNELS + channel] * part;
+
+						sum[frame * CHANNELS + channel] += (int)(sample * (channel == 0 ? left : right));
+					}
+
+					at += rate;
 				}
 
-				voice.position = position;
+				voice.position = at;
 
 				if (ended)
 				{
