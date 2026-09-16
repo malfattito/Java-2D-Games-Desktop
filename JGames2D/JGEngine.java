@@ -63,7 +63,10 @@ public class JGEngine implements Runnable
 	private void loadResources()
 	{
 		vetLevels = new ArrayList<JGLevel>();
-		//JGLog.init();
+		//o log comeca limpo a cada execucao. Ficou comentado por tempo
+		//bastante para o arquivo virar um monte de queixas de execucoes
+		//antigas, e uma delas foi confundida com um defeito do dia
+		JGLog.init();
 		JGImageManager.init();
 		JGSoundManager.init();
 		windowManager = new JGWindowManager(this);
