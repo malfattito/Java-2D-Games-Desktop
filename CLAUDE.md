@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 JGames2D is a small, self-contained 2D game engine written in plain Java (AWT/Swing), plus a sample shoot-'em-up game built on it. There is no build system (no Maven/Gradle/Ant) — the project is a raw source tree meant to be opened as an Eclipse-style Java project with the jars in `Libs/` added to the build path (see `README.md`).
 
+**The log starts empty on every run, and every line carries the hour.** `JGLog.init()` truncates `LOG.txt` and writes a header with the date and time the run began; `writeLog` stamps each entry with the hour. It matters because the call to `init` sat commented out in `JGEngine.loadResources` long enough for the file to become a heap of complaints from old runs with no dates on them, and one of those was read as a defect of the day and sent someone hunting an error that had already been fixed. A log that keeps everything and dates nothing is worse than no log.
+
 ## Build & Run
 
 Compile everything (all sources are UTF-8; pass the flag explicitly so the build does not depend on the platform's default charset):
